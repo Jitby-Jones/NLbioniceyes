@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>Bionic Irises for Facial Animation</name>
+  <author>kelby</author>
+  <packageId>kelby.BionicIrises</packageId>
+  <supportedVersions>
+    <li>1.6</li>
+    <li>1.7</li>
+  </supportedVersions>
+  <modDependencies>
+    <li>
+      <packageId>brrainz.harmony</packageId>
+      <displayName>Harmony</displayName>
+      <steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl>
+      <downloadUrl>https://github.com/pardeike/HarmonyRimWorld/releases/latest</downloadUrl>
+    </li>
+    <li>
+      <packageId>Nals.FacialAnimation</packageId>
+      <displayName>[NL] Facial Animation - WIP</displayName>
+      <steamWorkshopUrl>https://steamcommunity.com/sharedfiles/filedetails/?id=1635901197</steamWorkshopUrl>
+    </li>
+    <li>
+      <packageId>Nals.FacialAnimationExperimentals</packageId>
+      <displayName>[NL] Facial Animation - Experimentals</displayName>
+      <steamWorkshopUrl>https://steamcommunity.com/sharedfiles/filedetails/?id=2581693737</steamWorkshopUrl>
+    </li>
+  </modDependencies>
+  <loadAfter>
+    <li>brrainz.harmony</li>
+    <li>Nals.FacialAnimation</li>
+    <li>Nals.FacialAnimationExperimentals</li>
+    <li>vat.epoeforked</li>
+  </loadAfter>
+  <description>Gives bionic eyes their own iris sprites on [NL] Facial Animation faces, one eye at a time.
+
+- Bionic eye: gunmetal lens with a ring in the pawn's own eye colour.
+- Advanced bionic eye (EPOE-Forked): silver bezel, segmented ring and hexagonal aperture.
+- Tactical bionic eye (EPOE-Forked): olive housing with an eye-coloured reticle.
+- Archotech eye: gold rim, pearl iris and a star-shaped pupil.
+
+Only the accents take the pawn's original eye colour; metal, glass and glints keep their own colours. Each eye is handled separately, so a pawn with one bionic eye keeps one natural eye. Implants that sit on top of an eye, such as EPOE's tactical cornea implant, never change the iris.
+
+Requires Harmony, [NL] Facial Animation - WIP and [NL] Facial Animation - Experimentals. EPOE-Forked is optional. Human pawns only.</description>
+</ModMetaData>

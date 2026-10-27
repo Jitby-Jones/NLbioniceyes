@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 1.7 runs 1.6 assemblies unchanged (Waylith engine with Unity shims), so both versions load the same content. -->
+<loadFolders>
+  <v1.6>
+    <li>/</li>
+    <li>1.6</li>
+  </v1.6>
+  <v1.7>
+    <li>/</li>
+    <li>1.6</li>
+  </v1.7>
+</loadFolders>
