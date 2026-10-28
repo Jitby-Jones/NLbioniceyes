@@ -3,8 +3,8 @@
   <!--
     Eye replacements and the iris sprite drawn for each. Only replacements belong here: implants that sit on top
     of an eye (EPOE's tactical cornea implant) are left out, so the eye underneath keeps its own iris.
-    texPath holds a set per Facial Animation eye type and gender, placed by BionicIrisLayouts.xml; see
-    Source/make_irises.py.
+    texPath holds Female/ and Male/ sets drawn on Facial Animation's Normal eyes, placed by BionicIrisLayouts.xml;
+    see Source/make_irises.py.
   -->
   <BionicIrises.BionicIrisDef>
     <defName>BionicIris_Bionic</defName>

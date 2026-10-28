@@ -21,9 +21,9 @@ namespace BionicIrises
     {
         public List<HediffDef> hediffs = new List<HediffDef>();
 
-        // Folder holding a set per Facial Animation eye type and gender (see make_irises.py), <EyeTypeDef>/<Gender>/:
+        // Folder holding Female/ and Male/ sets drawn on Facial Animation's Normal eyes (see make_irises.py):
         // normal_{L,R}_{south,east}.png is the eye with its lights off, normal_{L,R}_glow_{south,east}.png its lights in
-        // white, tinted with the pawn's eye colour. Eye types without a set use EyeNormal's.
+        // white, tinted with the pawn's eye colour.
         public string texPath;
         public string shader = "Map/Cutout";
 
@@ -58,8 +58,6 @@ namespace BionicIrises
     [StaticConstructorOnStartup]
     public static class BionicIrisUtility
     {
-        const string FallbackEyeType = "EyeNormal";
-
         static readonly FieldInfo PawnField = AccessTools.Field(typeof(EyeballControllerComp), "pawn");
         static readonly FieldInfo FaceTypeField = AccessTools.Field(typeof(EyeballControllerComp), "faceType");
         static readonly FieldInfo GraphicListField = AccessTools.Field(typeof(EyeballControllerComp), "graphicList");
@@ -332,9 +330,9 @@ namespace BionicIrises
                 sideUv = BionicIrisLayoutDef.Uv(layout.side, layout.sideSize),
             };
             if (leftIris != null)
-                irises.left = Replace(graphics, NLFacialAnimationLayerType.L_Basic, NLFacialAnimationLayerType.L_Option, leftIris, faceType, gender, "L", leftColor);
+                irises.left = Replace(graphics, NLFacialAnimationLayerType.L_Basic, NLFacialAnimationLayerType.L_Option, leftIris, gender, "L", leftColor);
             if (rightIris != null)
-                irises.right = Replace(graphics, NLFacialAnimationLayerType.R_Basic, NLFacialAnimationLayerType.R_Option, rightIris, faceType, gender, "R", rightColor);
+                irises.right = Replace(graphics, NLFacialAnimationLayerType.R_Basic, NLFacialAnimationLayerType.R_Option, rightIris, gender, "R", rightColor);
             if (!irises.left && !irises.right)
                 return;
             PreparePieces(pawn, irises);
@@ -359,18 +357,16 @@ namespace BionicIrises
             }
         }
 
-        // The sprites are fitted to each eye type's own outline and position, so a bionic eye looks where the other eye
-        // does. Each layer's textures cover its eye facing south and the eye seen side-on.
+        // The sprites take the outline and position of Facial Animation's Normal eye, whatever the pawn's eye type, so a
+        // bionic eye looks where a natural one does. Each layer's textures cover its eye facing south and the eye seen
+        // side-on.
         static bool Replace(Dictionary<NLFacialAnimationLayerType, NLGraphic_Collection<EyeballShapeDef>> graphics,
-            NLFacialAnimationLayerType basic, NLFacialAnimationLayerType highlight, BionicIrisDef iris, EyeballTypeDef eyeType,
-            string gender, string side, Color accent)
+            NLFacialAnimationLayerType basic, NLFacialAnimationLayerType highlight, BionicIrisDef iris, string gender,
+            string side, Color accent)
         {
-            string folder = iris.texPath + "/" + eyeType.defName + "/" + gender;
-            if (!GraphicHelper.CheckTexPathExist(folder + "/normal_" + side))
-                folder = iris.texPath + "/" + FallbackEyeType + "/" + gender;
-            if (!GraphicHelper.CheckTexPathExist(folder + "/normal_" + side))
+            string tex = iris.texPath + "/" + gender + "/{0}_" + side;
+            if (!GraphicHelper.CheckTexPathExist(string.Format(tex, "normal")))
                 return false;
-            string tex = folder + "/{0}_" + side;
             graphics[basic] = Collection(new NLGraphicParam(iris.shader, tex, null, Color.white, Color.white));
             // The highlight layer sits just above the eyeball, moves with it and closes with it, so it carries the
             // lights; its own glints are not wanted, as the sprite has them.

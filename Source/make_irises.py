@@ -1,26 +1,27 @@
-"""Draws the iris sprites for Bionic Irises as pixel art, fitted to [NL] Facial Animation - Experimentals' eyes.
+"""Draws the iris sprites for Bionic Irises as pixel art, fitted to [NL] Facial Animation - Experimentals' Normal eyes.
 
 Run: python make_irises.py [folder of Facial Animation - Experimentals]   (defaults to the Steam workshop copy)
 
-Experimentals' eyeball textures are only read: every iris takes the exact outline and position of the eye it replaces
-for each eye type, so a bionic eye looks where the natural eye beside it looks. The designs are pixel art at twice
-Facial Animation's resolution, one sample per pixel, so each pixel is a deliberate colour and edges stay hard.
+Experimentals' Normal eyeball textures are only read: every iris takes the outline and position of the Normal eye of
+its gender, whatever the pawn's eye type, so a bionic eye looks where a natural one does, and an outer line as heavy as
+the one Facial Animation draws round that eye, measured all the way round. The designs are pixel art at twice Facial
+Animation's resolution, one sample per pixel, so each pixel is a deliberate colour and edges stay hard. Facing south
+round parts are drawn round, with the housing filling the rest of the eye (the male eye is wider than it is tall); seen
+side-on they are foreshortened.
 
-For each eye type, <Design>/<EyeTypeDef>/<Gender>/ holds, per eye layer (L or R):
+<Design>/<Gender>/ holds, per eye layer (L or R):
 
   normal_{L,R}_{south,east}.png       the eye with its lights off
   normal_{L,R}_glow_{south,east}.png  its lights in white, tinted with the eye colour in game and drawn unlit
 
 Facing south L is the eye on the viewer's left. _east is the eye seen side-on: the L layer shows it facing east and
-the R layer facing west, which the game mirrors. Each texture covers a small rectangle of the face, the same for every
-eye type of a gender, and the game draws it on the matching piece of the head mesh; 1.6/Defs/BionicIrisLayouts.xml,
-written here too, records those rectangles.
+the R layer facing west, which the game mirrors. Each texture covers a small rectangle of the face, and the game draws
+it on the matching piece of the head mesh; 1.6/Defs/BionicIrisLayouts.xml, written here too, records those rectangles.
 """
 import math
 import os
 import struct
 import sys
-import xml.etree.ElementTree as ET
 import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -29,15 +30,19 @@ OUT = os.path.join(ROOT, "Textures", "Things", "Pawn", "BionicIrises")
 LAYOUT = os.path.join(ROOT, "1.6", "Defs", "BionicIrisLayouts.xml")
 PREVIEW = os.path.join(ROOT, "About", "Preview.png")
 EXPERIMENTALS = r"C:\Program Files (x86)\Steam\steamapps\workshop\content\294100\2581693737"
+NORMAL_EYE = ("Textures", "Things", "Pawn", "FA-Experimentals", "Eyes", "Normal")
 SCALE = 2  # pixels per Facial Animation texture pixel
 PAD = 2  # clear pixels around every iris texture
 GENDERS = ("Female", "Male")
 VIEWS = (("L", "south"), ("R", "south"), ("side", "east"))
+LINE_DARK = 0.12  # Facial Animation's outer line is the band darker than this inside the edge of its eyeball
+LINE_SPREAD = 15  # degrees either side over which the measured line width is averaged
 
 
 # ---- PNG ---------------------------------------------------------------------------------
 def read_png(path):
-    """Coverage (alpha, 0..1) of an 8-bit, non-interlaced PNG, as rows of floats."""
+    """Coverage (alpha) and brightness (mean of red, green and blue) of an 8-bit, non-interlaced PNG, as rows of
+    floats in 0..1."""
     with open(path, "rb") as fh:
         data = fh.read()
     pos, idat = 8, b""
@@ -52,7 +57,9 @@ def read_png(path):
     channels = {0: 1, 2: 3, 4: 2, 6: 4}.get(ctype)
     if depth != 8 or interlace or channels is None:
         raise ValueError(f"{path}: only 8-bit, non-interlaced grey, RGB or RGBA images are read")
-    raw, stride, prev, rows, i = zlib.decompress(idat), w * channels, bytearray(w * channels), [], 0
+    raw, stride, prev, i = zlib.decompress(idat), w * channels, bytearray(w * channels), 0
+    coverage, brightness = [], []
+    colours = 3 if channels >= 3 else 1
     for _ in range(h):
         kind, line = raw[i], bytearray(raw[i + 1:i + 1 + stride])
         i += 1 + stride
@@ -70,9 +77,10 @@ def read_png(path):
                 p = a + b - c
                 pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
                 line[x] = (line[x] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 0xff
-        rows.append([line[x * channels + channels - 1] / 255 if channels in (2, 4) else 1.0 for x in range(w)])
+        coverage.append([line[x * channels + channels - 1] / 255 if channels in (2, 4) else 1.0 for x in range(w)])
+        brightness.append([sum(line[x * channels:x * channels + colours]) / (255 * colours) for x in range(w)])
         prev = line
-    return rows
+    return coverage, brightness
 
 
 def save_png(path, rows, channels=4):
@@ -88,64 +96,76 @@ def save_png(path, rows, channels=4):
 
 
 # ---- Experimentals' eyes -----------------------------------------------------------------------
-def eye_types(root):
-    """Experimentals' eyeball types drawn one eye at a time: {defName: texPath}, from its newest version folder."""
-    versions = sorted((d for d in os.listdir(root) if d.replace(".", "").isdigit()), key=lambda d: [int(n) for n in d.split(".")])
-    found = {}
-    for dp, _, files in os.walk(os.path.join(root, versions[-1], "Defs")):
-        for f in sorted(files):
-            if f.endswith(".xml"):
-                for node in ET.parse(os.path.join(dp, f)).getroot():
-                    if node.tag == "FacialAnimation.EyeballTypeDef" and (node.findtext("altMaskPath") or "").strip():
-                        found[node.findtext("defName").strip()] = node.findtext("texPath").strip()
-    return found
-
-
 class Shape:
-    """One eye's outline at SCALE, sampled where the game cuts Experimentals' texture: its bilinear half-coverage edge."""
+    """One Normal eye at SCALE: the pixels inside its outline (cut where the game cuts Experimentals' texture, at its
+    bilinear half coverage), its centre, and by angle the distance to the rim and the width of its outer line."""
 
-    def __init__(self, coverage, half):
-        """coverage: alpha rows of a 512 px eyeball texture; half: None, or 'L'/'R' to keep one side of the face."""
-        self.coverage = coverage
+    def __init__(self, texture, half, round_parts):
+        """texture: (coverage, brightness) of a 512 px eyeball; half: None, or 'L'/'R' to keep one side of the face;
+        round_parts: scale the design equally across and down, rather than to the eye's width and height."""
+        self.coverage, self.brightness = texture
         self.half = half
-        covered = [(x, y) for y, row in enumerate(coverage) for x, a in enumerate(row) if a > 0 and self.side(x)]
+        covered = [(x, y) for y, row in enumerate(self.coverage) for x, a in enumerate(row) if a > 0 and self.side(x)]
         x0, x1 = (min(x for x, _ in covered) - 1) * SCALE, (max(x for x, _ in covered) + 2) * SCALE
         y0, y1 = (min(y for _, y in covered) - 1) * SCALE, (max(y for _, y in covered) + 2) * SCALE
         self.pixels = {(x, y) for y in range(y0, y1) for x in range(x0, x1)
-                       if self.alpha((x + 0.5) / SCALE, (y + 0.5) / SCALE) >= 0.5}
+                       if self.sample(self.coverage, (x + 0.5) / SCALE, (y + 0.5) / SCALE) >= 0.5}
         self.x0 = min(x for x, _ in self.pixels)
         self.x1 = max(x for x, _ in self.pixels) + 1
         self.y0 = min(y for _, y in self.pixels)
         self.y1 = max(y for _, y in self.pixels) + 1
         self.cx, self.cy = (self.x0 + self.x1) / 2, (self.y0 + self.y1) / 2
-        self.hw, self.hh = (self.x1 - self.x0) / 2, (self.y1 - self.y0) / 2
-        self.rim = [self.march(2 * math.pi * k / 360) for k in range(360)]
+        angles = [2 * math.pi * k / 360 for k in range(360)]
+        self.rim = [self.march(a) for a in angles]
+        widths = [self.line_width(a, r) for a, r in zip(angles, self.rim)]
+        self.line = [sum(widths[(k + j) % 360] for j in range(-LINE_SPREAD, LINE_SPREAD + 1)) / (2 * LINE_SPREAD + 1)
+                     for k in range(360)]
+        self.inner = [r - w for r, w in zip(self.rim, self.line)]
+        half_w = max(r * abs(math.cos(a)) for r, a in zip(self.inner, angles))
+        half_h = max(r * abs(math.sin(a)) for r, a in zip(self.inner, angles))
+        self.sx, self.sy = (min(half_w, half_h),) * 2 if round_parts else (half_w, half_h)
 
     def side(self, x):
         return self.half is None or (x < 256) == (self.half == "L")
 
-    def alpha(self, x, y):
-        """Bilinear coverage at a point in 512 px space, as the game filters it."""
+    def sample(self, rows, x, y):
+        """Bilinear value at a point in 512 px space, as the game filters it."""
         x, y = x - 0.5, y - 0.5
         i, j = math.floor(x), math.floor(y)
         fx, fy = x - i, y - j
 
         def at(a, b):
-            return self.coverage[b][a] if 0 <= a < len(self.coverage) and 0 <= b < len(self.coverage) and self.side(a) else 0
+            return rows[b][a] if 0 <= a < len(rows) and 0 <= b < len(rows) and self.side(a) else 0
         return (at(i, j) * (1 - fx) + at(i + 1, j) * fx) * (1 - fy) + (at(i, j + 1) * (1 - fx) + at(i + 1, j + 1) * fx) * fy
+
+    def at(self, rows, angle, d):
+        return self.sample(rows, (self.cx + math.cos(angle) * d) / SCALE, (self.cy + math.sin(angle) * d) / SCALE)
 
     def march(self, angle):
         """Distance in pixels from the centre to the rim along `angle`."""
-        c, s, d = math.cos(angle), math.sin(angle), 0.0
-        while self.alpha((self.cx + c * (d + 0.1)) / SCALE, (self.cy + s * (d + 0.1)) / SCALE) >= 0.5:
+        d = 0.0
+        while self.at(self.coverage, angle, d + 0.1) >= 0.5:
             d += 0.1
         return max(d, 0.5)
 
-    def reach(self, angle):
-        """The rim distance along `angle`, interpolated between whole degrees."""
+    def line_width(self, angle, rim):
+        """Width in pixels of Facial Animation's dark outer line inside the rim along `angle`."""
+        d = rim
+        while d > 0 and self.at(self.brightness, angle, d) < LINE_DARK:
+            d -= 0.1
+        return min(max(rim - d, 1.0), rim / 3)
+
+    def by_angle(self, values, angle):
         k = (angle % (2 * math.pi)) / (2 * math.pi) * 360
         i, f = int(k) % 360, k - int(k)
-        return self.rim[i] * (1 - f) + self.rim[(i + 1) % 360] * f
+        return values[i] * (1 - f) + values[(i + 1) % 360] * f
+
+    def rho(self, dx, dy):
+        """0 at the centre to 1 at the inner edge of the outer line: round (to the design's scale) toward the centre,
+        following the eye's outline toward the line."""
+        round_rho = math.hypot(dx / self.sx, dy / self.sy)
+        edge_rho = math.hypot(dx, dy) / self.by_angle(self.inner, math.atan2(dy, dx))
+        return round_rho + (edge_rho - round_rho) * min(1.0, max(0.0, (edge_rho - 0.55) / 0.4))
 
 
 # ---- pixel art ---------------------------------------------------------------------------
@@ -165,39 +185,49 @@ BAYER = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
 
 
 class Pixel:
-    """One pixel of an iris: its place in the eye (u right, v down, by half the eye's width and height; rho 0 at the
-    centre to 1 at the rim, rings following the eye's outline near the rim and rounding off toward the centre) and
-    drawing helpers."""
+    """One pixel of an iris: its place in the design (u right, v down, in units of the design's scale; rho 0 at the
+    centre to 1 at the outer line) and drawing helpers."""
 
     def __init__(self, shape, x, y):
         self.shape, self.x, self.y = shape, x, y
-        dx, dy = x + 0.5 - shape.cx, y + 0.5 - shape.cy
-        self.hw, self.hh = shape.hw, shape.hh
-        self.u, self.v = dx / shape.hw, dy / shape.hh
-        round_rho = math.hypot(self.u, self.v)
-        outline_rho = math.hypot(dx, dy) / shape.reach(math.atan2(dy, dx))
-        self.rho = round_rho + (outline_rho - round_rho) * min(1.0, max(0.0, (round_rho - 0.3) / 0.45))
+        self.dx, self.dy = x + 0.5 - shape.cx, y + 0.5 - shape.cy
+        self.sx, self.sy = shape.sx, shape.sy
+        self.u, self.v = self.dx / self.sx, self.dy / self.sy
+        self.rho = shape.rho(self.dx, self.dy)
+        self.on_line = math.hypot(self.dx, self.dy) >= shape.by_angle(shape.inner, math.atan2(self.dy, self.dx))
         self.light = (self.v + 1) / 2  # Facial Animation lights irises from below
 
     def within(self, rho):
         return self.rho < rho
 
+    def ring_distance(self, rho, angle):
+        """Distance in pixels from the centre to the ring rho along `angle`."""
+        lo, hi = 0.0, self.shape.by_angle(self.shape.inner, angle)
+        c, s = math.cos(angle), math.sin(angle)
+        for _ in range(24):
+            mid = (lo + hi) / 2
+            if self.shape.rho(c * mid, s * mid) < rho:
+                lo = mid
+            else:
+                hi = mid
+        return lo
+
     def ring_point(self, rho, angle):
         """The point (u, v) at angle `angle` on the ring rho."""
-        d = rho * self.shape.reach(angle)
-        return d * math.cos(angle) / self.hw, d * math.sin(angle) / self.hh
+        d = self.ring_distance(rho, angle)
+        return d * math.cos(angle) / self.sx, d * math.sin(angle) / self.sy
 
     def band(self, lo, angle):
-        """Width in pixels of the band from ring lo out to the rim, along `angle`."""
-        return (1 - lo) * self.shape.reach(angle)
+        """Width in pixels of the band from ring lo out to the outer line, along `angle`."""
+        return self.shape.by_angle(self.shape.inner, angle) - self.ring_distance(lo, angle)
 
     def near(self, cu, cv, radius):
         """Within `radius` pixels of the point (cu, cv)."""
-        return math.hypot((self.u - cu) * self.hw, (self.v - cv) * self.hh) < radius
+        return math.hypot((self.u - cu) * self.sx, (self.v - cv) * self.sy) < radius
 
     def off_line(self, angle):
         """Distance in pixels from the line through the centre at `angle`."""
-        return abs(-math.sin(angle) * self.u * self.hw + math.cos(angle) * self.v * self.hh)
+        return abs(-math.sin(angle) * self.dx + math.cos(angle) * self.dy)
 
     def shade(self, colours, t=None, dither=0.5):
         """A palette colour for brightness t (default: the light from below), with ordered dithering at the seams."""
@@ -212,8 +242,8 @@ class Pixel:
         return 1.0 if d < 0.45 else 0.84 if d < 0.8 else 0.7
 
 
-# ---- designs: each returns (base colour, glow) for one pixel inside the outline. glow is None for unlit pixels, a level
-# in (0, 1] for a light (its base colour is the lamp switched off), or GLINT for a specular highlight. ----
+# ---- designs: each returns (base colour, glow) for one pixel inside the outer line. glow is None for unlit pixels, a
+# level in (0, 1] for a light (its base colour is the lamp switched off), or GLINT for a specular highlight. ----
 GUNMETAL = palette("#1f2328", "#2a2f35", "#353b42", "#434a52", "#556069")
 SCREW = palette("#101215", "#59636d", "#8c96a0")
 LENS_OFF = hexc("#1a2027")
@@ -221,7 +251,7 @@ LENS_OFF = hexc("#1a2027")
 
 def screw(px, cu, cv, colours):
     """A round screw head 4 px across, lit from the top left, or None if px is not on it."""
-    d = math.hypot((px.u - cu) * px.hw, (px.v - cv) * px.hh)
+    d = math.hypot((px.u - cu) * px.sx, (px.v - cv) * px.sy)
     if d >= 2.1:
         return None
     if d >= 1.25:
@@ -240,7 +270,7 @@ def bionic(px):
                 head = screw(px, *px.ring_point(0.85, angle), colours=SCREW)
                 if head:
                     return head, None
-        if not px.within(0.9) and px.v > 0.25:
+        if not px.within(0.92) and px.v > 0.25:
             return GUNMETAL[-1], None  # rim catching the light from below
         return px.shade(GUNMETAL), None
     if not px.within(0.64):
@@ -293,10 +323,10 @@ def tactical(px):
     if px.near(0.3, -0.33, 1.9) or px.near(-0.31, 0.3, 0.9):
         return WHITE, GLINT
     if not px.within(0.74):
-        for angle, length in ((-math.pi / 2, 0.79), (0.0, 0.79), (-math.pi / 2 - 0.42, 0.85), (-math.pi / 2 + 0.42, 0.85),
-                              (-0.42, 0.85), (0.42, 0.85)):
-            ahead = px.u * math.cos(angle) + px.v * math.sin(angle) > 0
-            if ahead and px.band(0.74, angle) >= 3.5 and px.off_line(angle) < 0.75 and not px.within(length) and px.within(0.95):
+        for angle, length in ((-math.pi / 2, 0.8), (0.0, 0.8), (-math.pi / 2 - 0.42, 0.87), (-math.pi / 2 + 0.42, 0.87),
+                              (-0.42, 0.87), (0.42, 0.87)):
+            ahead = px.dx * math.cos(angle) + px.dy * math.sin(angle) > 0
+            if ahead and px.band(0.74, angle) >= 3.5 and px.off_line(angle) < 0.75 and not px.within(length):
                 return TICK, None  # range ticks along the top and the outer side
         return px.shade(OLIVE, dither=0.8), None
     if not px.within(0.68):
@@ -318,7 +348,7 @@ def archotech(px):
     if px.near(0.36, -0.46, 2.0) or px.near(-0.4, 0.4, 0.9):
         return WHITE, GLINT
     if not px.within(0.71):
-        if not px.within(0.88) and px.v > 0.3:
+        if not px.within(0.9) and px.v > 0.3:
             return hexc("#f1d88a"), None  # bright lip of the gold rim
         return px.shade(GOLD), None
     if not px.within(0.67):
@@ -349,17 +379,18 @@ def sprite(name, shape):
     inside = shape.pixels
     art, lights, glints = {}, set(), set()
     for x, y in inside:
-        if not all(n in inside for n in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1))):
+        px = Pixel(shape, x, y)
+        if px.on_line or not all(n in inside for n in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1))):
             art[(x, y)] = [outline + (1.0,), None]
             continue
-        rgb, level = design(Pixel(shape, x, y))
+        rgb, level = design(px)
         art[(x, y)] = [rgb + (1.0,), None]
         if level == GLINT:
             glints.add((x, y))
         elif level is not None:
             art[(x, y)][1] = (level, level, level, 1.0)
             lights.add((x, y))
-    # The halo stays inside the outline and off the glints, in hard steps like the rest of the art.
+    # The halo stays inside the outer line and off the glints, in hard steps like the rest of the art.
     edge = set(lights)
     for step, (alpha, reach) in enumerate(zip(HALO, (((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)),
                                                      ((1, 0), (-1, 0), (0, 1), (0, -1))))):
@@ -436,23 +467,15 @@ def preview(path, shape):
 
 
 def build(root):
-    types = eye_types(root)
-    shapes = {}
-    for def_name, tex_path in sorted(types.items()):
-        for gender in GENDERS:
-            folder = os.path.join(root, "Textures", *tex_path.split("/"), gender)
-            if not os.path.isdir(folder):
-                continue
-            south = read_png(os.path.join(folder, "normal_south.png"))
-            east = read_png(os.path.join(folder, "normal_east.png"))
-            shapes[(def_name, gender)] = {"L": Shape(south, "L"), "R": Shape(south, "R"), "side": Shape(east, None)}
-    # One rectangle per gender and view holds that eye in every eye type.
-    regions = {}
+    shapes, regions = {}, {}
     for gender in GENDERS:
+        folder = os.path.join(root, *NORMAL_EYE, gender)
+        south = read_png(os.path.join(folder, "normal_south.png"))
+        east = read_png(os.path.join(folder, "normal_east.png"))
+        shapes[gender] = {"L": Shape(south, "L", True), "R": Shape(south, "R", True), "side": Shape(east, None, False)}
         for view, _ in VIEWS:
-            found = [s[view] for (_, g), s in shapes.items() if g == gender]
-            regions[(gender, view)] = (min(s.x0 for s in found) - PAD, min(s.y0 for s in found) - PAD,
-                                       max(s.x1 for s in found) + PAD, max(s.y1 for s in found) + PAD)
+            s = shapes[gender][view]
+            regions[(gender, view)] = (s.x0 - PAD, s.y0 - PAD, s.x1 + PAD, s.y1 + PAD)
         # both eyes facing south share one size, so the game needs a single one
         (lx0, ly0, lx1, ly1), (rx0, ry0, rx1, ry1) = regions[(gender, "L")], regions[(gender, "R")]
         w, h, top = max(lx1 - lx0, rx1 - rx0), max(ly1, ry1) - min(ly0, ry0), min(ly0, ry0)
@@ -460,18 +483,18 @@ def build(root):
         regions[(gender, "R")] = (rx0, top, rx0 + w, top + h)
     count = 0
     for name in DESIGNS:
-        for (def_name, gender), views in sorted(shapes.items()):
-            d = os.path.join(OUT, name, def_name, gender)
+        for gender in GENDERS:
+            d = os.path.join(OUT, name, gender)
             os.makedirs(d, exist_ok=True)
             for view, rot in VIEWS:
-                art = sprite(name, views[view])
+                art = sprite(name, shapes[gender][view])
                 for side in (("L", "R") if view == "side" else (view,)):
                     for kind, index, hidden in (("", 0, OUTLINE), ("_glow", 1, (1, 1, 1))):
                         save_png(os.path.join(d, f"normal_{side}{kind}_{rot}.png"), texture(art, regions[(gender, view)], index, hidden))
                         count += 1
     write_layout(regions)
-    preview(PREVIEW, shapes[("EyeNormal", "Female")]["L"])
-    print(f"wrote {count} textures for {len(shapes)} eye types to {os.path.normpath(OUT)}, the layout and the preview")
+    preview(PREVIEW, shapes["Female"]["L"])
+    print(f"wrote {count} textures to {os.path.normpath(OUT)}, the layout and the preview")
 
 
 if __name__ == "__main__":
