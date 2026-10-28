@@ -31,14 +31,16 @@
     <li>Nals.FacialAnimationExperimentals</li>
     <li>vat.epoeforked</li>
   </loadAfter>
-  <description>Gives bionic eyes their own iris sprites on [NL] Facial Animation faces, one eye at a time.
+  <description>Gives bionic eyes their own pixel-art iris sprites on [NL] Facial Animation faces, one eye at a time.
 
-- Bionic eye: gunmetal lens with a ring in the pawn's own eye colour.
-- Advanced bionic eye (EPOE-Forked): silver bezel, segmented ring and hexagonal aperture.
-- Tactical bionic eye (EPOE-Forked): olive housing with an eye-coloured reticle.
-- Archotech eye: gold rim, pearl iris and a star-shaped pupil.
+- Bionic eye: gunmetal bezel with four screws, a ring in the pawn's own eye colour and a camera lens.
+- Advanced bionic eye (EPOE-Forked): silver bezel, six-segment ring and hexagonal aperture.
+- Tactical bionic eye (EPOE-Forked): olive housing with range ticks and an eye-coloured reticle.
+- Archotech eye: gold rim, pearl iris with gold veins, a luminous ring and a star-shaped pupil.
 
-Only the accents take the pawn's original eye colour; metal, glass and glints keep their own colours. Each eye is handled separately, so a pawn with one bionic eye keeps one natural eye. Implants that sit on top of an eye, such as EPOE's tactical cornea implant, never change the iris.
+The eye-coloured parts glow: they stay bright at night and go dark when the pawn dies. Metal, glass and glints keep their own colours. The irises are drawn at twice Facial Animation's resolution, sit centred in the eye and turn with the head.
+
+Each eye is handled separately, so a pawn with one bionic eye keeps one natural eye. Which side is which follows Facial Animation, including its "switch left and right eyes" option. Implants that sit on top of an eye, such as EPOE's tactical cornea implant, never change the iris.
 
 Requires Harmony, [NL] Facial Animation - WIP and [NL] Facial Animation - Experimentals. EPOE-Forked is optional. Human pawns only.</description>
 </ModMetaData>
