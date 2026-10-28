@@ -18,6 +18,7 @@ measured all the way round, the design scaled to sit inside that line. Experimen
 Facing south L is the eye on the viewer's left. _east is the eye seen side-on: the L layer shows it facing east and
 the R layer facing west, which the game mirrors. Each texture covers a small rectangle of the face, and the game draws
 it on the matching piece of the head mesh; 1.6/Defs/BionicIrisLayouts.xml, written here too, records those rectangles.
+Mask_{south,east}.png is plain white, the mask Facial Animation's eyeball shader is given for the eye textures.
 """
 import math
 import os
@@ -430,9 +431,11 @@ def build(root):
                     save_png(os.path.join(d, f"normal_{side}_{rot}.png"), base)
                     save_png(os.path.join(d, f"normal_{side}_glow_{rot}.png"), glow)
                     count += 2
+    for rot in ("south", "east"):
+        save_png(os.path.join(OUT, f"Mask_{rot}.png"), [bytearray(b"\xff" * 16) for _ in range(4)])
     write_layout(regions)
     preview(PREVIEW, eyes["Female"]["L"], regions[("Female", "L")])
-    print(f"wrote {count} textures to {os.path.normpath(OUT)}, the layout and the preview")
+    print(f"wrote {count} textures and the mask to {os.path.normpath(OUT)}, the layout and the preview")
 
 
 if __name__ == "__main__":
