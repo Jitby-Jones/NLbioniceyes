@@ -194,26 +194,14 @@ namespace BionicIrises
             public int[] triangles;
         }
 
-        // The alpha of one lid cover texture around the eyes, rows from the top, in pixels of the 512 px face. Facial
-        // Animation cuts the cover at half alpha; past the window it counts as closed.
+        // One lid cover texture around the eyes, worked out once: for each quarter-pixel row of a window of the 512 px
+        // face, top down, where the cover leaves the eye open, as runs of quarter pixels (start and end pairs from the
+        // window's left). Facial Animation cuts the cover where its filtered alpha reaches half: the lights are cut there,
+        // the iris where the cover is all but opaque, a little wider. Past the window the eye counts as covered.
         sealed class Cover
         {
-            public int x0, y0, width, height;
-            public byte[] alpha;
-
-            public float At(float x, float y)
-            {
-                x -= x0 + 0.5f;
-                y -= y0 + 0.5f;
-                int i = Mathf.FloorToInt(x), j = Mathf.FloorToInt(y);
-                float fx = x - i, fy = y - j;
-                return Mathf.Lerp(Mathf.Lerp(Texel(i, j), Texel(i + 1, j), fx), Mathf.Lerp(Texel(i, j + 1), Texel(i + 1, j + 1), fx), fy);
-            }
-
-            float Texel(int i, int j)
-            {
-                return i < 0 || j < 0 || i >= width || j >= height ? 1f : alpha[j * width + i] / 255f;
-            }
+            public int x0, y0;
+            public int[][] lights, iris;
         }
 
         static BionicIrisUtility()
@@ -447,7 +435,7 @@ namespace BionicIrises
                     NLFacialAnimationLayerType layer = left ? (lights ? NLFacialAnimationLayerType.L_Option : NLFacialAnimationLayerType.L_Basic)
                         : (lights ? NLFacialAnimationLayerType.R_Option : NLFacialAnimationLayerType.R_Basic);
                     Vector3 eye = ((IFacialAnimationController)irises.eyes).GetOffset(layer, parms.Portrait, parms.facing);
-                    Cut(clip, CoverFor(irises, shape, clip.side), eye - lids, lights ? 0.5f : 0.98f);
+                    Cut(clip, CoverFor(irises, shape, clip.side), eye - lids, lights);
                 }
             }
             catch (Exception e)
@@ -469,8 +457,8 @@ namespace BionicIrises
         }
 
         // Rebuilds a clip's mesh if the head, the rectangle, the lid cover or the eye's offset from the lids (delta, in
-        // the head mesh's units) has changed. A layer is cut where the cover, as drawn over it, is below threshold.
-        static void Cut(Clip clip, Cover cover, Vector3 delta, float threshold)
+        // the head mesh's units) has changed.
+        static void Cut(Clip clip, Cover cover, Vector3 delta, bool lights)
         {
             HeadQuad head = QuadOf(clip.head);
             if (head == null)
@@ -483,7 +471,7 @@ namespace BionicIrises
             int y = cover == null ? 0 : -Mathf.RoundToInt(delta.z / up.z * 512f * Steps);
             if (clip.IsBuilt(clip.head, clip.uv, cover, x, y))
                 return;
-            Fill(clip.mesh, head, clip.uv, cover, x / (float)Steps, y / (float)Steps, threshold);
+            Fill(clip.mesh, head, clip.uv, cover == null ? null : lights ? cover.lights : cover.iris, cover, x, y);
             clip.Built(clip.head, clip.uv, cover, x, y);
         }
 
@@ -724,7 +712,7 @@ namespace BionicIrises
                 {
                     piece = new Mesh();
                     piece.name = "BionicIrisPiece";
-                    Fill(piece, quad, uv, null, 0f, 0f, 0f);
+                    Fill(piece, quad, uv, null, null, 0, 0);
                 }
                 pieces[uv] = piece;
                 return piece;
@@ -767,42 +755,48 @@ namespace BionicIrises
             return quad;
         }
 
+        // Lists Fill reuses. Main thread only.
+        static readonly List<Vector3> FillVertices = new List<Vector3>();
+        static readonly List<Vector2> FillUvs = new List<Vector2>();
+        static readonly List<int> FillTriangles = new List<int>(), FillRuns = new List<int>(), FillBand = new List<int>();
+
         // Fills mesh with the part of a head that shows the texture rectangle uv, mapping a whole texture onto it: all of
-        // it without a cover, otherwise just where the cover, moved by (dx, dy) pixels of the face texture, is below
-        // threshold, followed in steps of a quarter pixel. Its corners are the head's own, interpolated, so it keeps the
-        // head's depth, its mirroring facing west and its winding.
-        static void Fill(Mesh mesh, HeadQuad head, Rect uv, Cover cover, float dx, float dy, float threshold)
+        // it without open runs, otherwise just where the cover's open runs (see Cover), moved by (dx, dy) quarter pixels,
+        // fall. Its corners are the head's own, interpolated, so it keeps the head's depth, its mirroring facing west and
+        // its winding.
+        static void Fill(Mesh mesh, HeadQuad head, Rect uv, int[][] open, Cover cover, int dx, int dy)
         {
             int columns = Mathf.RoundToInt(uv.width * 512f) * Steps, rows = Mathf.RoundToInt(uv.height * 512f) * Steps;
-            float left = uv.xMin * 512f, top = (1f - uv.yMax) * 512f;
-            var vertices = new List<Vector3>();
-            var uvs = new List<Vector2>();
-            var triangles = new List<int>();
-            if (cover == null)
+            List<Vector3> vertices = FillVertices;
+            List<Vector2> uvs = FillUvs;
+            List<int> triangles = FillTriangles, runs = FillRuns, band = FillBand;
+            vertices.Clear();
+            uvs.Clear();
+            triangles.Clear();
+            if (open == null)
                 AddQuad(head, uv, columns, rows, 0, 0, columns, rows, vertices, uvs, triangles);
             else
             {
-                // runs of open steps along each row, top down, rows with the same runs making one band of quads
-                var runs = new List<int>();
-                var band = new List<int>();
+                // where the rectangle's steps fall on the cover's
+                int rowShift = (Mathf.RoundToInt((1f - uv.yMax) * 512f) - cover.y0) * Steps + dy;
+                int columnShift = (Mathf.RoundToInt(uv.xMin * 512f) - cover.x0) * Steps + dx;
+                // rows with the same runs make one band of quads
+                band.Clear();
                 int bandTop = 0;
                 for (int row = 0; row <= rows; row++)
                 {
                     runs.Clear();
-                    if (row < rows)
+                    int coverRow = row + rowShift;
+                    if (row < rows && coverRow >= 0 && coverRow < open.Length)
                     {
-                        float y = top + (row + 0.5f) / Steps + dy;
-                        int start = -1;
-                        for (int column = 0; column <= columns; column++)
+                        int[] line = open[coverRow];
+                        for (int i = 0; i < line.Length; i += 2)
                         {
-                            bool open = column < columns && cover.At(left + (column + 0.5f) / Steps + dx, y) < threshold;
-                            if (open && start < 0)
-                                start = column;
-                            else if (!open && start >= 0)
+                            int start = Math.Max(line[i] - columnShift, 0), end = Math.Min(line[i + 1] - columnShift, columns);
+                            if (start < end)
                             {
                                 runs.Add(start);
-                                runs.Add(column);
-                                start = -1;
+                                runs.Add(end);
                             }
                         }
                     }
@@ -821,6 +815,49 @@ namespace BionicIrises
             mesh.SetTriangles(triangles, 0);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
+        }
+
+        // The runs of quarter pixels, row by row, where the cover's filtered alpha (the window's, rows from the top) is
+        // below threshold. Quarter-pixel centres fall a fixed number of eighths past a texel centre, so the filtering is
+        // done in whole numbers.
+        static int[][] OpenRuns(byte[] alpha, int width, int height, float threshold)
+        {
+            int[] back = { 1, 1, 0, 0 }, eighths = { 5, 7, 1, 3 };
+            int limit = (int)Math.Ceiling(threshold * 255f * 64f);
+            var rows = new int[height * Steps][];
+            var line = new List<int>();
+            for (int j = 0; j < rows.Length; j++)
+            {
+                int ty = j / Steps - back[j % Steps], fy = eighths[j % Steps];
+                line.Clear();
+                int start = -1;
+                for (int i = 0; i <= width * Steps; i++)
+                {
+                    bool open = false;
+                    if (i < width * Steps)
+                    {
+                        int tx = i / Steps - back[i % Steps], fx = eighths[i % Steps];
+                        int upper = (8 - fx) * Texel(alpha, width, height, tx, ty) + fx * Texel(alpha, width, height, tx + 1, ty);
+                        int lower = (8 - fx) * Texel(alpha, width, height, tx, ty + 1) + fx * Texel(alpha, width, height, tx + 1, ty + 1);
+                        open = (8 - fy) * upper + fy * lower < limit;
+                    }
+                    if (open && start < 0)
+                        start = i;
+                    else if (!open && start >= 0)
+                    {
+                        line.Add(start);
+                        line.Add(i);
+                        start = -1;
+                    }
+                }
+                rows[j] = line.ToArray();
+            }
+            return rows;
+        }
+
+        static int Texel(byte[] alpha, int width, int height, int x, int y)
+        {
+            return x < 0 || y < 0 || x >= width || y >= height ? 255 : alpha[y * width + x];
         }
 
         static bool SameRuns(List<int> a, List<int> b)
@@ -857,7 +894,7 @@ namespace BionicIrises
         // through a render texture. Main thread only.
         static void ReadCovers()
         {
-            const int margin = 24;
+            const int margin = 12;
             var windows = new int[2][];  // south, east: left, top, right, bottom
             foreach (BionicIrisLayoutDef layout in DefDatabase<BionicIrisLayoutDef>.AllDefsListForReading)
             {
@@ -926,18 +963,25 @@ namespace BionicIrises
                 RenderTexture.active = target;
                 copy.ReadPixels(new Rect(0f, 0f, width, height), 0, 0);
                 Color32[] pixels = copy.GetPixels32();
-                cover = new Cover { x0 = window[0], y0 = window[1], width = window[2] - window[0], height = window[3] - window[1] };
-                cover.alpha = new byte[cover.width * cover.height];
-                for (int j = 0; j < cover.height; j++)
+                int windowWidth = window[2] - window[0], windowHeight = window[3] - window[1];
+                var alpha = new byte[windowWidth * windowHeight];
+                for (int j = 0; j < windowHeight; j++)
                 {
                     // texture rows run from the bottom
-                    int ty = height - 1 - (int)((cover.y0 + j + 0.5f) * height / 512f);
-                    for (int i = 0; i < cover.width; i++)
+                    int ty = height - 1 - (int)((window[1] + j + 0.5f) * height / 512f);
+                    for (int i = 0; i < windowWidth; i++)
                     {
-                        int tx = (int)((cover.x0 + i + 0.5f) * width / 512f);
-                        cover.alpha[j * cover.width + i] = tx < 0 || ty < 0 || tx >= width || ty >= height ? (byte)255 : pixels[ty * width + tx].a;
+                        int tx = (int)((window[0] + i + 0.5f) * width / 512f);
+                        alpha[j * windowWidth + i] = tx < 0 || ty < 0 || tx >= width || ty >= height ? (byte)255 : pixels[ty * width + tx].a;
                     }
                 }
+                cover = new Cover
+                {
+                    x0 = window[0],
+                    y0 = window[1],
+                    lights = OpenRuns(alpha, windowWidth, windowHeight, 0.5f),
+                    iris = OpenRuns(alpha, windowWidth, windowHeight, 0.98f),
+                };
             }
             finally
             {
