@@ -38,7 +38,7 @@
 - Tactical bionic eye (EPOE-Forked): olive housing with range ticks and an eye-coloured reticle.
 - Archotech eye: gold rim, pearl iris with gold veins, a luminous ring and a star-shaped pupil.
 
-The eye-coloured parts glow: they stay bright at night and go dark when the pawn dies. Metal, glass and glints keep their own colours. The irises are drawn at twice Facial Animation's resolution, sit centred in the eye and turn with the head.
+The eye-coloured parts glow: they stay bright at night and go dark when the pawn dies. Metal, glass and glints keep their own colours. Each iris has the exact outline and position of the Facial Animation eye it replaces, for every Experimentals eye type, so a bionic eye looks where the natural one does. The irises are drawn at twice Facial Animation's resolution and turn with the head.
 
 Each eye is handled separately, so a pawn with one bionic eye keeps one natural eye. Which side is which follows Facial Animation, including its "switch left and right eyes" option. Implants that sit on top of an eye, such as EPOE's tactical cornea implant, never change the iris.
 
