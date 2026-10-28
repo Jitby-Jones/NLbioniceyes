@@ -1,7 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Written by Source/make_irises.py: the rectangle of Facial Animation's 512 px face that each iris
-     texture covers, as top-left corner and size in pixels. Facing south "left" is the eye on the viewer's
-     left; "side" is the eye seen facing east, mirrored facing west. -->
 <Defs>
   <BionicIrises.BionicIrisLayoutDef>
     <defName>BionicIrisLayout_Female</defName>

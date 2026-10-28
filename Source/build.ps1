@@ -1,4 +1,3 @@
-# Builds 1.6/Assemblies/BionicIrises.dll with the C# compiler that ships with .NET Framework (no SDK needed).
 param(
     [string]$RimWorld = "C:\Program Files (x86)\Steam\steamapps\common\RimWorld",
     [string]$Workshop = "C:\Program Files (x86)\Steam\steamapps\workshop\content\294100"
@@ -7,8 +6,8 @@ $managed = "$RimWorld\RimWorldWin64_Data\Managed"
 $refs = @(
     "$managed\mscorlib.dll", "$managed\System.dll", "$managed\System.Core.dll", "$managed\netstandard.dll",
     "$managed\Assembly-CSharp.dll", "$managed\UnityEngine.CoreModule.dll",
-    "$Workshop\2009463077\Current\Assemblies\0Harmony.dll",        # Harmony
-    "$Workshop\1635901197\1.6\Assemblies\FacialAnimation.dll"      # [NL] Facial Animation - WIP
+    "$Workshop\2009463077\Current\Assemblies\0Harmony.dll",
+    "$Workshop\1635901197\1.6\Assemblies\FacialAnimation.dll"
 )
 foreach ($r in $refs) { if (-not (Test-Path $r)) { throw "Missing reference: $r" } }
 $out = Join-Path $PSScriptRoot "..\1.6\Assemblies\BionicIrises.dll"

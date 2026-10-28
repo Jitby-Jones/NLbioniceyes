@@ -1,5 +1,3 @@
-// Bionic Irises: per-eye iris sprites for bionic eyes on [NL] Facial Animation faces.
-// Written in C# 5 so it builds with the compiler that ships with .NET Framework (see build.ps1).
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -13,33 +11,19 @@ using Verse;
 
 namespace BionicIrises
 {
-    /// <summary>
-    /// An iris sprite set drawn in place of Facial Animation's eyeball on any eye that carries one of these hediffs.
-    /// Only eye replacements belong here: implants that sit on top of an eye (such as EPOE's tactical cornea implant)
-    /// are left unmapped, so the replacement underneath keeps its iris.
-    /// </summary>
     public class BionicIrisDef : Def
     {
         public List<HediffDef> hediffs = new List<HediffDef>();
 
-        // Folder holding Female/ and Male/ sets drawn on Facial Animation's Normal eyes (see make_irises.py):
-        // normal_{L,R}_{south,east}.png is the eye with its lights off, normal_{L,R}_glow_{south,east}.png its lights in
-        // white, tinted with the pawn's eye colour. The eye is drawn with Facial Animation's own eyeball shader, so that
-        // the lids close over it as they do over a natural eye.
         public string texPath;
 
-        // Drawn after the map's darkness, so the lights stay bright at night. As nothing drawn before can cover them,
-        // they are cut to the part of the eye the lids leave open.
         public string glowShader = "Map/TransparentPostLight";
 
-        // Drawn instead when glowing is turned off in the mod settings: the lights then darken at night like the rest.
         public string litShader = "Map/Transparent";
 
-        // Decides between two mapped hediffs on the same eye; the higher one is drawn.
         public int priority;
     }
 
-    /// <summary>The mod's settings, under Options, Mod settings.</summary>
     public class BionicIrisSettings : ModSettings
     {
         public bool glow = true;
@@ -73,7 +57,6 @@ namespace BionicIrises
             list.End();
         }
 
-        // Runs when the settings window closes: faces already made are rebuilt with the new settings.
         public override void WriteSettings()
         {
             base.WriteSettings();
@@ -81,11 +64,6 @@ namespace BionicIrises
         }
     }
 
-    /// <summary>
-    /// Where the iris textures of one gender sit on Facial Animation's 512 px face, written by make_irises.py: top-left
-    /// corners and sizes in pixels, facing south for the eye on the viewer's left and right, and facing east for the eye
-    /// seen side-on, which the game mirrors facing west.
-    /// </summary>
     public class BionicIrisLayoutDef : Def
     {
         public Gender gender;
@@ -95,7 +73,6 @@ namespace BionicIrises
         public Vector2 side;
         public Vector2 sideSize;
 
-        // The rectangle in texture coordinates, which run from the bottom left.
         internal static Rect Uv(Vector2 corner, Vector2 size)
         {
             return new Rect(corner.x / 512f, 1f - (corner.y + size.y) / 512f, size.x / 512f, size.y / 512f);
@@ -113,33 +90,25 @@ namespace BionicIrises
         static readonly FieldInfo LidTypeField = AccessTools.Field(typeof(LidControllerComp), "faceType");
         static readonly FieldInfo LidShapeField = AccessTools.Field(typeof(LidControllerComp), "Shape");
 
-        // Plain white, so that Facial Animation's eyeball shader draws an iris texture as it is.
         const string WhiteMask = "Things/Pawn/BionicIrises/Mask";
 
         static readonly HashSet<HediffDef> MappedHediffs = new HashSet<HediffDef>();
 
-        // The irises on each pawn's eyes, per comp and per pawn, without keeping dead pawns alive.
         static readonly ConditionalWeakTable<EyeballControllerComp, Irises> Fitted = new ConditionalWeakTable<EyeballControllerComp, Irises>();
         static readonly ConditionalWeakTable<Pawn, Irises> FittedPawns = new ConditionalWeakTable<Pawn, Irises>();
 
-        // Pieces of Facial Animation's head meshes that iris textures are drawn on, by head mesh and texture rectangle.
-        // They are made on the main thread and only read while the game gathers draw requests on its worker threads.
         static readonly Dictionary<Mesh, Dictionary<Rect, Mesh>> Pieces = new Dictionary<Mesh, Dictionary<Rect, Mesh>>();
 
-        // Head meshes as quads (see HeadQuad), and the alpha of Facial Animation's lid covers around the eyes by lid type,
-        // lid shape and view (see Cover). Main thread only.
         static readonly Dictionary<Mesh, HeadQuad> Heads = new Dictionary<Mesh, HeadQuad>();
         static readonly Dictionary<LidTypeDef, Dictionary<LidShapeDef, Cover[]>> Covers = new Dictionary<LidTypeDef, Dictionary<LidShapeDef, Cover[]>>();
 
-        // Iris textures cover only the eye, so they are only drawn when they can be put on their piece of the head.
         static bool DrawsPieces;
         static bool WarnedMissingPiece;
         internal static bool Disabled;
 
-        // Pieces are cut to the lids just before each pawn is drawn.
         static bool ClipsToLids;
 
-        const int Steps = 4;  // a cut follows the lids in quarter pixels
+        const int Steps = 4;
 
         sealed class Irises
         {
@@ -149,19 +118,11 @@ namespace BionicIrises
             public LidControllerComp lids;
             public Gender gender;
 
-            // The eyes (body parts) the irises are drawn on.
             public readonly List<BodyPartRecord> parts = new List<BodyPartRecord>();
 
-            // The pieces each iris layer is drawn on, cut to the lids: [eye * 4 + layer * 2 + drawnAtOnce], eye 0 for L
-            // and 1 for R, layer 0 for the eye and 1 for its lights, and apart for portraits and the like, which are drawn
-            // at once, as the map is drawn at the end of the frame.
             public Clip[] clips;
         }
 
-        // An iris layer's piece of the head, cut to the part of the eye Facial Animation's lids leave open. The head mesh
-        // and rectangle it is wanted for are noted while draw requests are gathered on worker threads; the mesh is then
-        // rebuilt on the main thread before the pawn is drawn, whenever those, the lids or the eye's offset from them
-        // have changed.
         sealed class Clip
         {
             public Mesh mesh;
@@ -189,18 +150,12 @@ namespace BionicIrises
             }
         }
 
-        // A head mesh's corners by texture corner (0 bottom left, 1 bottom right, 2 top left, 3 top right) and its
-        // triangles as those corners, for meshes that are a single quad.
         sealed class HeadQuad
         {
             public readonly Vector3[] corners = new Vector3[4];
             public int[] triangles;
         }
 
-        // One lid cover texture around the eyes, worked out once: for each quarter-pixel row of a window of the 512 px
-        // face, top down, where the cover leaves the eye open, as runs of quarter pixels (start and end pairs from the
-        // window's left). Facial Animation cuts the cover where its filtered alpha reaches half: the lights are cut there,
-        // the iris where the cover is all but opaque, a little wider. Past the window the eye counts as covered.
         sealed class Cover
         {
             public int x0, y0;
@@ -222,8 +177,6 @@ namespace BionicIrises
                 Log.Error("[Bionic Irises] This Facial Animation version is not supported; iris sprites are off.");
                 return;
             }
-            // Each patch goes on separately so that one target changing in a game or Facial Animation update
-            // (1.6 and 1.7 share this assembly) cannot stop the others.
             var harmony = new Harmony("neztech.fabioniciris");
             DrawsPieces = Patch(harmony, AccessTools.Method(typeof(NLFacialAnimationHeadNodeWorker), "AppendDrawRequests"), "AppendDrawRequestsPostfix");
             Type faceGraphics = AccessTools.TypeByName("FacialAnimation.DrawFaceGraphicsComp");
@@ -274,8 +227,6 @@ namespace BionicIrises
             }
         }
 
-        // The Pawn_HealthTracker overloads that take the Hediff itself, found by their first parameter so that
-        // signature changes between game versions do not matter.
         static List<MethodInfo> HediffMethods(string name)
         {
             var found = new List<MethodInfo>();
@@ -303,8 +254,6 @@ namespace BionicIrises
             }
         }
 
-        // Facial Animation has just made a pawn's face layers, on the main thread, with the head mesh it will draw them
-        // on: the pieces of that mesh are made now, as they cannot be made while draw requests are gathered.
         static void CompRenderNodesPostfix(ThingComp __instance)
         {
             if (Disabled)
@@ -324,9 +273,6 @@ namespace BionicIrises
             }
         }
 
-        // Facial Animation draws every face layer on the whole head. An iris layer is drawn on just the piece of the head
-        // its texture covers instead, cut to the lids (see DrawPrefix), and not at all when its eye is out of sight (L
-        // facing west, R facing east).
         static void AppendDrawRequestsPostfix(PawnRenderNode node, PawnDrawParms parms, List<PawnGraphicDrawRequest> requests)
         {
             NLFacialAnimationPartNode part = node as NLFacialAnimationPartNode;
@@ -376,7 +322,6 @@ namespace BionicIrises
             Mesh piece = PieceOf(request.mesh, uv);
             if (piece == null)
             {
-                // Never stretch the small texture over the whole head; skip the eye for this frame instead.
                 requests.RemoveAt(last);
                 if (!WarnedMissingPiece)
                 {
@@ -398,9 +343,6 @@ namespace BionicIrises
             requests[last] = replaced;
         }
 
-        // RimWorld draws its own small picture over an artificial eye, from the eye hediff's render nodes (vanilla's
-        // bionic and archotech eyes, EPOE-Forked's), which would cover the iris. It is left out on the eyes the irises are
-        // drawn on, and kept everywhere else, such as on faces Facial Animation does not draw.
         static void CanDrawNowPostfix(PawnRenderNode node, PawnDrawParms parms, ref bool __result)
         {
             Irises irises;
@@ -409,8 +351,6 @@ namespace BionicIrises
                 __result = false;
         }
 
-        // Facial Animation shows eye highlights only for content, conscious pawns. An iris's lights sit in that layer
-        // but should only go out with the eye itself (blinks and closed eyes), so they are shown again whenever it is.
         static void ApplyFramePostfix(FaceAnimationDef.AnimationFrame __0, EyeballControllerComp ___eyeballController)
         {
             Irises irises;
@@ -423,12 +363,6 @@ namespace BionicIrises
                 ___eyeballController.SetVisible(NLFacialAnimationLayerType.R_Option, open);
         }
 
-        // Facial Animation hides the top of a natural eye under its lid layer. The iris itself is drawn with the same
-        // shader as a natural eye so the lid covers it too, but its lights are drawn after the map's darkness, where
-        // nothing can cover them, so they are cut to the part of the eye the lids leave open. The eye moves under the lids
-        // as the face animates, so the cut follows it here, on the main thread, before the pawn is drawn. The iris layer
-        // is cut as well, a little wider than the opening so that the lid still draws its edge, in case the game draws it
-        // over the lid all the same.
         static void DrawPrefix(PawnRenderTree __instance, PawnDrawParms parms)
         {
             Irises irises;
@@ -438,7 +372,7 @@ namespace BionicIrises
             {
                 LidShapeDef shape = irises.lids == null ? null : LidShapeField.GetValue(irises.lids) as LidShapeDef;
                 if (shape != null && shape.disableEyeball)
-                    return;  // the eyes are closed and not drawn
+                    return;
                 Vector3 lids = irises.lids == null ? Vector3.zero
                     : ((IFacialAnimationController)irises.lids).GetOffset(NLFacialAnimationLayerType.Cover, parms.Portrait, parms.facing);
                 for (int i = parms.DrawNow ? 1 : 0; i < irises.clips.Length; i += 2)
@@ -460,7 +394,6 @@ namespace BionicIrises
             }
         }
 
-        // The cover Facial Animation draws for the pawn's lids in their current shape, or null if it has none.
         static Cover CoverFor(Irises irises, LidShapeDef shape, bool side)
         {
             LidTypeDef type = irises.lids == null ? null : LidTypeField.GetValue(irises.lids) as LidTypeDef;
@@ -471,8 +404,6 @@ namespace BionicIrises
             return covers[(irises.gender == Gender.Female ? 2 : 0) + (side ? 1 : 0)];
         }
 
-        // Rebuilds a clip's mesh if the head, the rectangle, the lid cover or the eye's offset from the lids (delta, in
-        // the head mesh's units) has changed.
         static void Cut(Clip clip, Cover cover, Vector3 delta, bool lights)
         {
             HeadQuad head = QuadOf(clip.head);
@@ -481,7 +412,6 @@ namespace BionicIrises
             Vector3 across = head.corners[1] - head.corners[0], up = head.corners[2] - head.corners[0];
             if (Mathf.Abs(across.x) < 1e-5f || Mathf.Abs(up.z) < 1e-5f)
                 cover = null;
-            // the offset in steps of the face texture's pixels, down the texture
             int x = cover == null ? 0 : Mathf.RoundToInt(delta.x / across.x * 512f * Steps);
             int y = cover == null ? 0 : -Mathf.RoundToInt(delta.z / up.z * 512f * Steps);
             if (clip.IsBuilt(clip.head, clip.uv, cover, x, y))
@@ -490,7 +420,6 @@ namespace BionicIrises
             clip.Built(clip.head, clip.uv, cover, x, y);
         }
 
-        // Runs inside every hediff change in the game, so it must never throw.
         static void HediffChangedPostfix(Hediff __0)
         {
             if (Disabled || __0 == null)
@@ -506,7 +435,6 @@ namespace BionicIrises
             }
         }
 
-        /// <summary>Swaps in the iris sprites after Facial Animation has built a pawn's eyeball layers.</summary>
         internal static void Apply(EyeballControllerComp comp)
         {
             Pawn pawn = (Pawn)PawnField.GetValue(comp);
@@ -518,8 +446,6 @@ namespace BionicIrises
             if (!DrawsPieces)
                 return;
             EyeballTypeDef faceType = (EyeballTypeDef)FaceTypeField.GetValue(comp);
-            // The sprites are drawn for Facial Animation's human faces, and per-eye layers only exist with the
-            // Experimentals eye masks.
             if (pawn == null || pawn.def != ThingDefOf.Human || pawn.health == null || faceType == null || faceType.altMaskPath.NullOrEmpty())
                 return;
             var graphics = (Dictionary<NLFacialAnimationLayerType, NLGraphic_Collection<EyeballShapeDef>>)GraphicListField.GetValue(comp);
@@ -537,7 +463,6 @@ namespace BionicIrises
             if (layout == null)
                 return;
 
-            // Accents take the pawn's own eye colours, not the tint Facial Animation gives bionic eyes.
             Color rightColor = comp.GetCurrentColor();
             Color leftColor = (Color)SecondColorField.GetValue(comp);
             Color geneColor;
@@ -549,9 +474,6 @@ namespace BionicIrises
             rightColor = Efficiency(pawn, rightEye, rightColor);
             leftColor = Efficiency(pawn, leftEye, leftColor);
 
-            // Facial Animation draws the left eye in its L layer and the right eye in its R layer, unless its
-            // "switch left and right eyes" option swaps them. L is the eye on the viewer's left facing south and the one
-            // shown facing east; R is the other one, shown facing west.
             BodyPartRecord leftPart = leftEye, rightPart = rightEye;
             if (FacialAnimationMod.Settings != null && FacialAnimationMod.Settings.SwitchLeftAndRightEyes)
             {
@@ -573,7 +495,6 @@ namespace BionicIrises
                 lids = pawn.GetComp<LidControllerComp>(),
                 gender = pawn.gender == Gender.Female ? Gender.Female : Gender.Male,
             };
-            // The same shader as Facial Animation's own eyeballs, so that its lids are drawn over the iris.
             string eyeShader = GraphicHelper.GetSkinShader(pawn, faceType);
             if (leftIris != null)
                 irises.left = Replace(graphics, NLFacialAnimationLayerType.L_Basic, NLFacialAnimationLayerType.L_Option, leftIris, eyeShader, gender, "L", leftColor);
@@ -591,7 +512,6 @@ namespace BionicIrises
             FittedPawns.Add(pawn, irises);
         }
 
-        // The clips for a pawn's iris layers, reusing the meshes of the irises they replace, as meshes are not collected.
         static Clip[] ClipsFor(Irises previous)
         {
             if (!ClipsToLids)
@@ -611,7 +531,6 @@ namespace BionicIrises
             return clips;
         }
 
-        /// <summary>Asks Facial Animation to rebuild a pawn's eyes when a mapped eye is installed or removed.</summary>
         internal static void Refresh(Pawn pawn, Hediff hediff)
         {
             if (pawn == null || hediff == null || !MappedHediffs.Contains(hediff.def))
@@ -621,7 +540,6 @@ namespace BionicIrises
                 Reload(pawn, comp);
         }
 
-        /// <summary>Rebuilds the eyes of every pawn with irises, on the maps and in caravans, for new settings.</summary>
         internal static void ReloadAll()
         {
             if (Current.Game == null || !UnityData.IsInMainThread)
@@ -643,8 +561,6 @@ namespace BionicIrises
         static void Reload(Pawn pawn, EyeballControllerComp comp)
         {
             comp.SetDirty();
-            // Facial Animation only reloads eyes when the pawn's render tree is rebuilt, so ask for that as its own
-            // editor does; graphics can only be touched from the main thread.
             if (UnityData.IsInMainThread)
             {
                 pawn.Drawer.renderer.SetAllGraphicsDirty();
@@ -652,9 +568,6 @@ namespace BionicIrises
             }
         }
 
-        // The sprites take the outline and position of Facial Animation's Normal eye, whatever the pawn's eye type, so a
-        // bionic eye looks where a natural one does. Each layer's textures cover its eye facing south and the eye seen
-        // side-on.
         static bool Replace(Dictionary<NLFacialAnimationLayerType, NLGraphic_Collection<EyeballShapeDef>> graphics,
             NLFacialAnimationLayerType basic, NLFacialAnimationLayerType highlight, BionicIrisDef iris, string eyeShader,
             string gender, string side, Color accent)
@@ -663,8 +576,6 @@ namespace BionicIrises
             if (!GraphicHelper.CheckTexPathExist(string.Format(tex, "normal")))
                 return false;
             graphics[basic] = Collection(new NLGraphicParam(eyeShader, tex, WhiteMask, Color.white, Color.white));
-            // The highlight layer sits just above the eyeball, moves with it and closes with it, so it carries the
-            // lights; its own glints are not wanted, as the sprite has them.
             string lights = BionicIrisesMod.Settings == null || BionicIrisesMod.Settings.glow ? iris.glowShader : iris.litShader;
             graphics[highlight] = Collection(new NLGraphicParam(lights, tex + "_glow", null, Glow(accent), Color.white));
             return true;
@@ -685,8 +596,6 @@ namespace BionicIrises
             return null;
         }
 
-        // Makes the pieces of the head meshes Facial Animation draws this pawn's face on, in every facing, for every iris
-        // rectangle. Main thread only.
         static void PreparePieces(Pawn pawn, Irises irises)
         {
             GraphicMeshSet set = MeshPool.GetMeshSetForSize(GraphicHelper.GetHeadMeshSet(pawn));
@@ -715,7 +624,6 @@ namespace BionicIrises
             return UnityData.IsInMainThread ? MakePiece(head, uv) : null;
         }
 
-        // The part of a head mesh that shows the texture rectangle uv, whole. Main thread only.
         static Mesh MakePiece(Mesh head, Rect uv)
         {
             lock (Pieces)
@@ -741,7 +649,6 @@ namespace BionicIrises
             }
         }
 
-        // A head mesh as a quad, or null if it is not a single quad with whole texture corners. Main thread only.
         static HeadQuad QuadOf(Mesh head)
         {
             HeadQuad quad;
@@ -777,15 +684,10 @@ namespace BionicIrises
             return quad;
         }
 
-        // Lists Fill reuses. Main thread only.
         static readonly List<Vector3> FillVertices = new List<Vector3>();
         static readonly List<Vector2> FillUvs = new List<Vector2>();
         static readonly List<int> FillTriangles = new List<int>(), FillRuns = new List<int>(), FillBand = new List<int>();
 
-        // Fills mesh with the part of a head that shows the texture rectangle uv, mapping a whole texture onto it: all of
-        // it without open runs, otherwise just where the cover's open runs (see Cover), moved by (dx, dy) quarter pixels,
-        // fall. Its corners are the head's own, interpolated, so it keeps the head's depth, its mirroring facing west and
-        // its winding.
         static void Fill(Mesh mesh, HeadQuad head, Rect uv, int[][] open, Cover cover, int dx, int dy)
         {
             int columns = Mathf.RoundToInt(uv.width * 512f) * Steps, rows = Mathf.RoundToInt(uv.height * 512f) * Steps;
@@ -799,10 +701,8 @@ namespace BionicIrises
                 AddQuad(head, uv, columns, rows, 0, 0, columns, rows, vertices, uvs, triangles);
             else
             {
-                // where the rectangle's steps fall on the cover's
                 int rowShift = (Mathf.RoundToInt((1f - uv.yMax) * 512f) - cover.y0) * Steps + dy;
                 int columnShift = (Mathf.RoundToInt(uv.xMin * 512f) - cover.x0) * Steps + dx;
-                // rows with the same runs make one band of quads
                 band.Clear();
                 int bandTop = 0;
                 for (int row = 0; row <= rows; row++)
@@ -839,9 +739,6 @@ namespace BionicIrises
             mesh.RecalculateBounds();
         }
 
-        // The runs of quarter pixels, row by row, where the cover's filtered alpha (the window's, rows from the top) is
-        // below threshold. Quarter-pixel centres fall a fixed number of eighths past a texel centre, so the filtering is
-        // done in whole numbers.
         static int[][] OpenRuns(byte[] alpha, int width, int height, float threshold)
         {
             int[] back = { 1, 1, 0, 0 }, eighths = { 5, 7, 1, 3 };
@@ -894,7 +791,6 @@ namespace BionicIrises
             return true;
         }
 
-        // One quad of a piece, over columns left to right and rows top to bottom of the texture's steps.
         static void AddQuad(HeadQuad head, Rect uv, int columns, int rows, int left, int top, int right, int bottom,
             List<Vector3> vertices, List<Vector2> uvs, List<int> triangles)
         {
@@ -911,13 +807,10 @@ namespace BionicIrises
                 triangles.Add(start + corner);
         }
 
-        // Reads the alpha of every lid cover Facial Animation can draw over open eyes, around the irises, by lid type,
-        // shape, gender and view, with room for the eyes to move. The textures are not readable, so each is copied
-        // through a render texture. Main thread only.
         static void ReadCovers()
         {
             const int margin = 12;
-            var windows = new int[2][];  // south, east: left, top, right, bottom
+            var windows = new int[2][];
             foreach (BionicIrisLayoutDef layout in DefDatabase<BionicIrisLayoutDef>.AllDefsListForReading)
             {
                 Grow(ref windows[0], layout.left, layout.frontSize, margin);
@@ -934,10 +827,9 @@ namespace BionicIrises
                 {
                     if (shape.disableEyeball)
                         continue;
-                    var covers = new Cover[4];  // [gender * 2 + view]: gender 0 male, 1 female; view 0 south, 1 east
+                    var covers = new Cover[4];
                     for (int gender = 0; gender < 2; gender++)
                     {
-                        // as Facial Animation finds them: the shape's own cover, else the normal one
                         string prefix = GraphicHelper.GetTexPathPrefix(type, gender == 0 ? Gender.Male : Gender.Female) + "_cover";
                         string path = string.Format(prefix, shape.defName);
                         if (!GraphicHelper.CheckTexPathExist(path))
@@ -989,7 +881,6 @@ namespace BionicIrises
                 var alpha = new byte[windowWidth * windowHeight];
                 for (int j = 0; j < windowHeight; j++)
                 {
-                    // texture rows run from the bottom
                     int ty = height - 1 - (int)((window[1] + j + 0.5f) * height / 512f);
                     for (int i = 0; i < windowWidth; i++)
                     {
@@ -1015,7 +906,6 @@ namespace BionicIrises
             return cover;
         }
 
-        // The eye colour at full brightness, so that dark eyes still give off light.
         static Color Glow(Color color)
         {
             float max = Mathf.Max(color.r, Mathf.Max(color.g, color.b));
@@ -1050,7 +940,6 @@ namespace BionicIrises
             return best;
         }
 
-        // Matches Facial Animation: an active gene with an eye colour def recolours both eyes.
         static bool GeneEyeColor(Pawn pawn, out Color color)
         {
             color = Color.white;
@@ -1073,7 +962,6 @@ namespace BionicIrises
             return found;
         }
 
-        // Matches Facial Animation: a damaged eye's colour fades with its efficiency.
         static Color Efficiency(Pawn pawn, BodyPartRecord eye, Color color)
         {
             if (eye == null)
