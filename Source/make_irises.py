@@ -8,7 +8,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")
 OUT = os.path.join(ROOT, "Textures", "Things", "Pawn", "BionicIrises")
 LAYOUT = os.path.join(ROOT, "1.6", "Defs", "BionicIrisLayouts.xml")
-PREVIEW = os.path.join(ROOT, "About", "Preview.png")
 EXPERIMENTALS = r"C:\Program Files (x86)\Steam\steamapps\workshop\content\294100\2581693737"
 NORMAL_EYE = ("Textures", "Things", "Pawn", "FA-Experimentals", "Eyes", "Normal")
 SS = 4
@@ -313,31 +312,6 @@ def write_layout(regions):
         fh.write("\n".join(lines) + "\n")
 
 
-def preview(path, eye, region):
-    eyes = [(0.25, 0.55, 0.95), (0.30, 0.85, 0.45), (1.0, 0.62, 0.18), (0.70, 0.45, 1.0)]
-    w, h, bg = 960, 540, (24, 27, 31)
-    rows = [bytearray(bytes(bg) * w) for _ in range(h)]
-    sw, sh = region[2] - region[0], region[3] - region[1]
-    z = min((h - 60) // (2 * sh), (w - 100) // (len(DESIGNS) * sw))
-    gap = (w - len(DESIGNS) * sw * z) // (len(DESIGNS) + 1)
-    vgap = (h - 2 * sh * z) // 3
-    for i, (name, tint) in enumerate(zip(DESIGNS, eyes)):
-        base, glow = draw(name, eye, region)
-        left = gap + i * (sw * z + gap)
-        for row, dark in enumerate((1.0, 0.2)):
-            top = vgap + row * (sh * z + vgap)
-            for y in range(sh):
-                for x in range(sw):
-                    b, g = base[y][x * 4:x * 4 + 4], glow[y][x * 4:x * 4 + 4]
-                    ba, ga = b[3] / 255, g[3] / 255
-                    rgb = [bc / 255 * dark * ba + c / 255 * dark * (1 - ba) for bc, c in zip(b[:3], bg)]
-                    rgb = [c * (1 - ga) + gc / 255 * t * ga for c, gc, t in zip(rgb, g[:3], tint)]
-                    px = bytes(round(min(1.0, c) * 255) for c in rgb)
-                    for yy in range(top + y * z, top + (y + 1) * z):
-                        rows[yy][(left + x * z) * 3:(left + (x + 1) * z) * 3] = px * z
-    save_png(path, rows, 3)
-
-
 def blocks(n):
     return n + -n % 4
 
@@ -372,8 +346,7 @@ def build(root):
     for rot in ("south", "east"):
         save_png(os.path.join(OUT, f"Mask_{rot}.png"), [bytearray(b"\xff" * 16) for _ in range(4)])
     write_layout(regions)
-    preview(PREVIEW, eyes["Female"]["L"], regions[("Female", "L")])
-    print(f"wrote {count} textures and the mask to {os.path.normpath(OUT)}, the layout and the preview")
+    print(f"wrote {count} textures and the mask to {os.path.normpath(OUT)}, and the layout")
 
 
 if __name__ == "__main__":
