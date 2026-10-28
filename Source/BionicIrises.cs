@@ -149,6 +149,9 @@ namespace BionicIrises
             public LidControllerComp lids;
             public Gender gender;
 
+            // The eyes (body parts) the irises are drawn on.
+            public readonly List<BodyPartRecord> parts = new List<BodyPartRecord>();
+
             // The pieces each iris layer is drawn on, cut to the lids: [eye * 4 + layer * 2 + drawnAtOnce], eye 0 for L
             // and 1 for R, layer 0 for the eye and 1 for its lights, and apart for portraits and the like, which are drawn
             // at once, as the map is drawn at the end of the frame.
@@ -227,6 +230,7 @@ namespace BionicIrises
             Patch(harmony, faceGraphics == null ? null : AccessTools.Method(faceGraphics, "CompRenderNodes"), "CompRenderNodesPostfix");
             Patch(harmony, AccessTools.Method(typeof(EyeballControllerComp), "LoadTextures"), "LoadTexturesPostfix");
             Patch(harmony, AccessTools.Method(typeof(AnimationFrameMapper), "ApplyFrame"), "ApplyFramePostfix");
+            Patch(harmony, AccessTools.Method(typeof(PawnRenderNodeWorker), "CanDrawNow"), "CanDrawNowPostfix");
             foreach (string name in new[] { "AddHediff", "RemoveHediff" })
             {
                 List<MethodInfo> overloads = HediffMethods(name);
@@ -394,6 +398,17 @@ namespace BionicIrises
             requests[last] = replaced;
         }
 
+        // RimWorld draws its own small picture over an artificial eye, from the eye hediff's render nodes (vanilla's
+        // bionic and archotech eyes, EPOE-Forked's), which would cover the iris. It is left out on the eyes the irises are
+        // drawn on, and kept everywhere else, such as on faces Facial Animation does not draw.
+        static void CanDrawNowPostfix(PawnRenderNode node, PawnDrawParms parms, ref bool __result)
+        {
+            Irises irises;
+            if (__result && node.hediff != null && parms.pawn != null && MappedHediffs.Contains(node.hediff.def)
+                && FittedPawns.TryGetValue(parms.pawn, out irises) && irises.parts.Contains(node.hediff.Part))
+                __result = false;
+        }
+
         // Facial Animation shows eye highlights only for content, conscious pawns. An iris's lights sit in that layer
         // but should only go out with the eye itself (blinks and closed eyes), so they are shown again whenever it is.
         static void ApplyFramePostfix(FaceAnimationDef.AnimationFrame __0, EyeballControllerComp ___eyeballController)
@@ -537,6 +552,7 @@ namespace BionicIrises
             // Facial Animation draws the left eye in its L layer and the right eye in its R layer, unless its
             // "switch left and right eyes" option swaps them. L is the eye on the viewer's left facing south and the one
             // shown facing east; R is the other one, shown facing west.
+            BodyPartRecord leftPart = leftEye, rightPart = rightEye;
             if (FacialAnimationMod.Settings != null && FacialAnimationMod.Settings.SwitchLeftAndRightEyes)
             {
                 BionicIrisDef iris = rightIris;
@@ -545,6 +561,8 @@ namespace BionicIrises
                 Color color = rightColor;
                 rightColor = leftColor;
                 leftColor = color;
+                leftPart = rightEye;
+                rightPart = leftEye;
             }
             var irises = new Irises
             {
@@ -563,6 +581,10 @@ namespace BionicIrises
                 irises.right = Replace(graphics, NLFacialAnimationLayerType.R_Basic, NLFacialAnimationLayerType.R_Option, rightIris, eyeShader, gender, "R", rightColor);
             if (!irises.left && !irises.right)
                 return;
+            if (irises.left)
+                irises.parts.Add(leftPart);
+            if (irises.right)
+                irises.parts.Add(rightPart);
             irises.clips = ClipsFor(previous);
             PreparePieces(pawn, irises);
             Fitted.Add(comp, irises);
