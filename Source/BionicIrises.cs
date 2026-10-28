@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using FacialAnimation;
 using HarmonyLib;
 using RimWorld;
+using RimWorld.Planet;
 using UnityEngine;
 using Verse;
 
@@ -30,8 +31,53 @@ namespace BionicIrises
         // Drawn after the map's darkness, so the lights stay bright at night.
         public string glowShader = "Map/TransparentPostLight";
 
+        // Drawn instead when glowing is turned off in the mod settings: the lights then darken at night like the rest.
+        public string litShader = "Map/Transparent";
+
         // Decides between two mapped hediffs on the same eye; the higher one is drawn.
         public int priority;
+    }
+
+    /// <summary>The mod's settings, under Options, Mod settings.</summary>
+    public class BionicIrisSettings : ModSettings
+    {
+        public bool glow = true;
+
+        public override void ExposeData()
+        {
+            base.ExposeData();
+            Scribe_Values.Look(ref glow, "glow", true);
+        }
+    }
+
+    public class BionicIrisesMod : Mod
+    {
+        public static BionicIrisSettings Settings;
+
+        public BionicIrisesMod(ModContentPack content) : base(content)
+        {
+            Settings = GetSettings<BionicIrisSettings>();
+        }
+
+        public override string SettingsCategory()
+        {
+            return Content.Name;
+        }
+
+        public override void DoSettingsWindowContents(Rect inRect)
+        {
+            var list = new Listing_Standard();
+            list.Begin(inRect);
+            list.CheckboxLabeled("BionicIrises_Glow".Translate().Resolve(), ref Settings.glow, "BionicIrises_GlowTip".Translate().Resolve());
+            list.End();
+        }
+
+        // Runs when the settings window closes: faces already made are rebuilt with the new settings.
+        public override void WriteSettings()
+        {
+            base.WriteSettings();
+            BionicIrisUtility.ReloadAll();
+        }
     }
 
     /// <summary>
@@ -101,7 +147,7 @@ namespace BionicIrises
             }
             // Each patch goes on separately so that one target changing in a game or Facial Animation update
             // (1.6 and 1.7 share this assembly) cannot stop the others.
-            var harmony = new Harmony("kelby.BionicIrises");
+            var harmony = new Harmony("neztech.fabioniciris");
             DrawsPieces = Patch(harmony, AccessTools.Method(typeof(NLFacialAnimationHeadNodeWorker), "AppendDrawRequests"), "AppendDrawRequestsPostfix");
             Type faceGraphics = AccessTools.TypeByName("FacialAnimation.DrawFaceGraphicsComp");
             Patch(harmony, faceGraphics == null ? null : AccessTools.Method(faceGraphics, "CompRenderNodes"), "CompRenderNodesPostfix");
@@ -345,8 +391,31 @@ namespace BionicIrises
             if (pawn == null || hediff == null || !MappedHediffs.Contains(hediff.def))
                 return;
             EyeballControllerComp comp = pawn.GetComp<EyeballControllerComp>();
-            if (comp == null)
+            if (comp != null)
+                Reload(pawn, comp);
+        }
+
+        /// <summary>Rebuilds the eyes of every pawn with irises, on the maps and in caravans, for new settings.</summary>
+        internal static void ReloadAll()
+        {
+            if (Current.Game == null || !UnityData.IsInMainThread)
                 return;
+            var pawns = new List<Pawn>();
+            foreach (Map map in Find.Maps)
+                pawns.AddRange(map.mapPawns.AllPawns);
+            foreach (Caravan caravan in Find.WorldObjects.Caravans)
+                pawns.AddRange(caravan.PawnsListForReading);
+            foreach (Pawn pawn in pawns)
+            {
+                EyeballControllerComp comp = pawn.GetComp<EyeballControllerComp>();
+                Irises irises;
+                if (comp != null && Fitted.TryGetValue(comp, out irises))
+                    Reload(pawn, comp);
+            }
+        }
+
+        static void Reload(Pawn pawn, EyeballControllerComp comp)
+        {
             comp.SetDirty();
             // Facial Animation only reloads eyes when the pawn's render tree is rebuilt, so ask for that as its own
             // editor does; graphics can only be touched from the main thread.
@@ -370,7 +439,8 @@ namespace BionicIrises
             graphics[basic] = Collection(new NLGraphicParam(iris.shader, tex, null, Color.white, Color.white));
             // The highlight layer sits just above the eyeball, moves with it and closes with it, so it carries the
             // lights; its own glints are not wanted, as the sprite has them.
-            graphics[highlight] = Collection(new NLGraphicParam(iris.glowShader, tex + "_glow", null, Glow(accent), Color.white));
+            string lights = BionicIrisesMod.Settings == null || BionicIrisesMod.Settings.glow ? iris.glowShader : iris.litShader;
+            graphics[highlight] = Collection(new NLGraphicParam(lights, tex + "_glow", null, Glow(accent), Color.white));
             return true;
         }
 

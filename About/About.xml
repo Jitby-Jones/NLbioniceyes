@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ModMetaData>
   <name>Bionic Irises for Facial Animation</name>
-  <author>kelby</author>
-  <packageId>kelby.BionicIrises</packageId>
+  <author>neztech</author>
+  <packageId>neztech.fabioniciris</packageId>
   <supportedVersions>
     <li>1.6</li>
     <li>1.7</li>
@@ -30,17 +30,10 @@
     <li>Nals.FacialAnimation</li>
     <li>Nals.FacialAnimationExperimentals</li>
     <li>vat.epoeforked</li>
+    <li>FrozenSnowFox.AdvancedBionicsExpansion</li>
   </loadAfter>
-  <description>Gives bionic eyes their own pixel-art iris sprites on [NL] Facial Animation faces, one eye at a time.
-
-- Bionic eye: gunmetal bezel with four screws, a ring in the pawn's own eye colour and a camera lens.
-- Advanced bionic eye (EPOE-Forked): silver bezel, six-segment ring and hexagonal aperture.
-- Tactical bionic eye (EPOE-Forked): olive housing with range ticks and an eye-coloured reticle.
-- Archotech eye: gold rim, pearl iris with gold veins, a luminous ring and a star-shaped pupil.
-
-The eye-coloured parts glow: they stay bright at night and go dark when the pawn dies. Metal, glass and glints keep their own colours. Every iris has the outline, position and outer line weight of Facial Animation's Normal eye for the pawn's gender, so a bionic eye looks where a natural one does. The irises are drawn at twice Facial Animation's resolution and turn with the head.
-
-Each eye is handled separately, so a pawn with one bionic eye keeps one natural eye. Which side is which follows Facial Animation, including its "switch left and right eyes" option. Implants that sit on top of an eye, such as EPOE's tactical cornea implant, never change the iris.
-
-Requires Harmony, [NL] Facial Animation - WIP and [NL] Facial Animation - Experimentals. EPOE-Forked is optional. Human pawns only.</description>
+  <description>Overlays default organic facial animation irises with different graphics if bionics are installed.
+Glow is toggleable in config
+Works with EPOE, FSF Advanced Bionics
+Feel free to suggest additional compats or variations.</description>
 </ModMetaData>

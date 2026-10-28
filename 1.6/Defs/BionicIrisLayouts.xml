@@ -6,19 +6,19 @@
   <BionicIrises.BionicIrisLayoutDef>
     <defName>BionicIrisLayout_Female</defName>
     <gender>Female</gender>
-    <left>(215,267.5)</left>
-    <right>(274.5,267.5)</right>
-    <frontSize>(22.5,24)</frontSize>
-    <side>(285.5,266.5)</side>
-    <sideSize>(15.5,24.5)</sideSize>
+    <left>(211,266)</left>
+    <right>(273,266)</right>
+    <frontSize>(28,28)</frontSize>
+    <side>(284,265)</side>
+    <sideSize>(20,28)</sideSize>
   </BionicIrises.BionicIrisLayoutDef>
   <BionicIrises.BionicIrisLayoutDef>
     <defName>BionicIrisLayout_Male</defName>
     <gender>Male</gender>
-    <left>(216,269)</left>
-    <right>(275,269)</right>
-    <frontSize>(21,17.5)</frontSize>
-    <side>(286,269.5)</side>
-    <sideSize>(14,17.5)</sideSize>
+    <left>(211,267)</left>
+    <right>(273,267)</right>
+    <frontSize>(28,24)</frontSize>
+    <side>(283,266)</side>
+    <sideSize>(20,28)</sideSize>
   </BionicIrises.BionicIrisLayoutDef>
 </Defs>

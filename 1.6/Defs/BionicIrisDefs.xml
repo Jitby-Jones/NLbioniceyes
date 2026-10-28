@@ -20,6 +20,7 @@
     <label>advanced bionic eye iris</label>
     <hediffs>
       <li MayRequire="vat.epoeforked">AdvancedBionicEye</li>
+      <li MayRequire="FrozenSnowFox.AdvancedBionicsExpansion">FSFAdvBionicEye</li>
     </hediffs>
     <texPath>Things/Pawn/BionicIrises/AdvancedBionic</texPath>
   </BionicIrises.BionicIrisDef>
