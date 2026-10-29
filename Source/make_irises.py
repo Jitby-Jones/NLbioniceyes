@@ -247,41 +247,52 @@ def archotech(u, v, r, a, su, sv, glints=True):
     return lit("#c8c3b4", "#f3efe4", sv), None
 
 
+def speckle(u, v, cells, seed):
+    n = math.sin(math.floor((u + 1) * cells) * 127.1 + math.floor((v + 1) * cells) * 311.7 + seed * 74.7) * 43758.5453
+    return n - math.floor(n)
+
+
 def artificial(u, v, r, a, su, sv, glints=True):
-    if glints and glint(su, sv, 0.30, -0.38, 0.13):
-        return hexc("#efe4cf"), GLINT
-    wood = lit("#5b3a20", "#8f6239", sv)
-    if r > 0.70:
-        return (hexc("#3f2715") if math.sin(sv * 21 + math.sin(su * 6) * 1.6) > 0.6 else wood), None
-    if r > 0.64:
-        return hexc("#2b2f36"), None
-    if r < 0.30:
-        return hexc("#1a1210"), None
-    if r > 0.50 and any(abs(math.remainder(a - k, 2 * math.pi)) < 0.16 for k in (2.5, 5.75)):
-        return wood, None
-    if math.cos(a * 9 + r * 4) > 0.55:
-        return hexc("#3b536b"), None
-    return lit("#4b6a86", "#88a4b9", sv), None
+    grain = math.sin(sv * 19 + math.sin(su * 5 + sv * 2) * 1.8) > 0.6
+    if r > 0.66:
+        return (lit("#3b2413", "#5c3b20", sv) if grain else lit("#5e3b20", "#93653b", sv)), None
+    if r > 0.59:
+        return hexc("#2a190d"), None
+    if r < 0.25:
+        return hexc("#21140b"), None
+    if r < 0.31:
+        return lit("#73492a", "#ab7a46", sv), None
+    if math.cos(a * 10) > 0.5:
+        return lit("#45291a", "#6a4528", sv), None
+    return lit("#6b4528", "#a2733f", sv), None
 
 
 def mechanical(u, v, r, a, su, sv, glints=True):
-    if glints and (glint(su, sv, 0.30, -0.36, 0.13) or glint(su, sv, -0.36, 0.40, 0.06)):
-        return WHITE, GLINT
-    if r > 0.66:
-        if r > 0.72 and any(abs(math.remainder(a - k, 2 * math.pi)) < 0.2 for k in (0.785, 2.356, 3.927, 5.498)):
-            return lit("#7a5a20", "#d0a54e", sv), None
-        return lit("#474c52", "#a7afb7", sv), None
-    if r < 0.14:
-        return lit("#8a6a28", "#e6c062", sv), None
-    if r < 0.30:
-        return hexc("#0c0e11"), None
-    if any(abs(math.remainder(a - k * math.pi / 3 - math.pi / 6, 2 * math.pi)) < 0.16 for k in range(6)):
-        return lit("#4a5056", "#9aa2aa", sv), None
-    return lit("#2a4361", "#5d82aa", sv), None
+    if glints and glint(su, sv, 0.32, -0.36, 0.11):
+        return hexc("#d8d4cb"), GLINT
+    if r > 0.72:
+        if r > 0.75 and any(abs(math.remainder(a - k * math.pi / 3 - 0.4, 2 * math.pi)) < 0.2 for k in range(6)):
+            return lit("#4f3418", "#a06d36", sv), None
+        return (lit("#1f1d1b", "#3e3a36", sv) if speckle(u, v, 9, 1) < 0.3 else lit("#2f2c29", "#6c665e", sv)), None
+    if r > 0.56 and math.cos(a * 8 + 0.3 * math.sin(a * 3)) <= -0.05:
+        return hexc("#121110"), None
+    if r < 0.09:
+        return lit("#3a3632", "#7d766d", sv), None
+    if r < 0.28:
+        return hexc("#0d0c0b"), None
+    if r < 0.32:
+        return hexc("#1a1816"), None
+    if speckle(u, v, 10, 2) < 0.22:
+        return lit("#22324a", "#3f5670", sv), None
+    return lit("#2e4057", "#5f7690", sv), None
+
+
+STARS = [(-0.42, 0.18, True), (0.38, 0.40, True), (0.47, 0.10, False), (0.15, 0.46, False), (-0.18, -0.46, False),
+         (-0.50, -0.12, False), (0.04, -0.50, False), (-0.33, 0.43, False)]
 
 
 def paresian(u, v, r, a, su, sv, glints=True):
-    if glints and glint(su, sv, 0.30, -0.40, 0.14):
+    if glints and glint(su, sv, 0.30, -0.40, 0.12):
         return WHITE, GLINT
     if r > 0.70:
         if r > 0.75 and any(abs(math.remainder(a - k, 2 * math.pi)) < 0.17 for k in (0.785, 2.356, 3.927, 5.498)):
@@ -291,9 +302,14 @@ def paresian(u, v, r, a, su, sv, glints=True):
         return lit("#8d949c", "#e6ebf0", sv), None
     if r < 0.27:
         return hexc("#0b0a10"), None
-    color, level = accent(sv, 0.7)
-    level *= 0.84 + 0.16 * (math.cos(a * 11) + 1) / 2
-    return color, min(1.0, level + max(0.0, 0.36 - r) * 2.0)
+    level = 0.16 + 0.10 * speckle(u, v, 6, 3)
+    for x, y, big in STARS:
+        dx, dy = abs(u - x), abs(v - y)
+        if math.hypot(dx, dy) < (0.11 if big else 0.085):
+            return hexc("#0e1226"), 1.0
+        if big and ((dx < 0.055 and dy < 0.32) or (dy < 0.055 and dx < 0.32)):
+            level = max(level, 0.9)
+    return hexc("#0e1226"), level
 
 
 DESIGNS = {"Bionic": (bionic, OUTLINE), "AdvancedBionic": (advanced, OUTLINE),
