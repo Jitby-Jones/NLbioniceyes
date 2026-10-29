@@ -32,6 +32,10 @@ namespace BionicIrises
         public bool blindEye;
 
         public float eyeColorTint;
+
+        public bool naturalEye;
+
+        public Color glowColor;
     }
 
     public class BionicIrisSettings : ModSettings
@@ -566,10 +570,6 @@ namespace BionicIrises
             BionicIrisDef leftIris = IrisOn(pawn, leftEye);
             if (rightIris == null && leftIris == null)
                 return;
-            string gender = pawn.gender == Gender.Female ? "Female" : "Male";
-            BionicIrisLayoutDef layout = Layout(pawn.gender == Gender.Female ? Gender.Female : Gender.Male);
-            if (layout == null)
-                return;
 
             Color rightColor = comp.GetCurrentColor();
             Color leftColor = (Color)SecondColorField.GetValue(comp);
@@ -598,13 +598,29 @@ namespace BionicIrises
                 leftPart = rightEye;
                 rightPart = leftEye;
             }
+            string eyeShader = GraphicHelper.GetSkinShader(pawn, faceType);
+            if (leftIris != null && leftIris.naturalEye)
+            {
+                Natural(graphics, pawn, faceType, eyeShader, NLFacialAnimationLayerType.L_Basic, NLFacialAnimationLayerType.L_Option, "_L", leftEyeColor);
+                leftIris = null;
+            }
+            if (rightIris != null && rightIris.naturalEye)
+            {
+                Natural(graphics, pawn, faceType, eyeShader, NLFacialAnimationLayerType.R_Basic, NLFacialAnimationLayerType.R_Option, "_R", rightEyeColor);
+                rightIris = null;
+            }
+            if (rightIris == null && leftIris == null)
+                return;
+            string gender = pawn.gender == Gender.Female ? "Female" : "Male";
+            BionicIrisLayoutDef layout = Layout(pawn.gender == Gender.Female ? Gender.Female : Gender.Male);
+            if (layout == null)
+                return;
             var irises = new Irises
             {
                 eyes = comp,
                 lids = pawn.GetComp<LidControllerComp>(),
                 gender = pawn.gender == Gender.Female ? Gender.Female : Gender.Male,
             };
-            string eyeShader = GraphicHelper.GetSkinShader(pawn, faceType);
             Color skin = SkinOf(pawn);
             if (leftIris != null && Replace(graphics, NLFacialAnimationLayerType.L_Basic, NLFacialAnimationLayerType.L_Option, leftIris, eyeShader, gender, "L", leftColor,
                 Tint(leftIris, skin, leftEyeColor)))
@@ -720,8 +736,17 @@ namespace BionicIrises
                 return false;
             graphics[basic] = Collection(new NLGraphicParam(eyeShader, tex, WhiteMask, tint, Color.white));
             string lights = BionicIrisesMod.Settings == null || BionicIrisesMod.Settings.glow ? iris.glowShader : iris.litShader;
-            graphics[highlight] = Collection(new NLGraphicParam(lights, tex + "_glow", null, Glow(accent), Color.white));
+            graphics[highlight] = Collection(new NLGraphicParam(lights, tex + "_glow", null, Glow(iris.glowColor.a > 0f ? iris.glowColor : accent), Color.white));
             return true;
+        }
+
+        static void Natural(Dictionary<NLFacialAnimationLayerType, NLGraphic_Collection<EyeballShapeDef>> graphics, Pawn pawn, EyeballTypeDef faceType,
+            string eyeShader, NLFacialAnimationLayerType basic, NLFacialAnimationLayerType highlight, string side, Color color)
+        {
+            string tex = GraphicHelper.GetTexPathPrefix(faceType, pawn.gender);
+            string mask = GraphicHelper.GetMaskPathPrefix(faceType, pawn.gender) + side;
+            graphics[basic] = Collection(new NLGraphicParam(eyeShader, tex, mask, color, Color.clear));
+            graphics[highlight] = Collection(new NLGraphicParam(eyeShader, tex + "_highlight", mask, Color.white, Color.clear));
         }
 
         static NLGraphic_Collection<EyeballShapeDef> Collection(NLGraphicParam param)

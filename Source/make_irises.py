@@ -332,6 +332,41 @@ def paresian(u, v, r, a, su, sv, glints=True):
     return hexc("#0b0e1f"), starlight(u, v, r, a)
 
 
+def bolt(u, v, angle):
+    return math.hypot(u - 0.78 * math.cos(angle), v - 0.78 * math.sin(angle)) < 0.09
+
+
+def receptor(u, v, r, a, su, sv, glints=True):
+    if glints and glint(su, sv, 0.30, -0.36, 0.12):
+        return WHITE, GLINT
+    if r > 0.70:
+        if bolt(u, v, -2.3) or bolt(u, v, 0.8) or (0.73 < r < 0.82 and 2.55 < a < 3.35):
+            return hexc("#1c2124"), None
+        return lit("#475154", "#7f898c", sv), None
+    if r > 0.63:
+        return hexc("#1f2528"), None
+    if r > 0.55:
+        return lit("#868c8f", "#b3b8ba", sv), None
+    if r < 0.09:
+        return hexc("#5d6366"), None
+    if 0.30 < r < 0.35:
+        return mix(lit("#a3a8ab", "#d6d9da", sv), hexc("#7c8285"), 0.5), None
+    return lit("#a3a8ab", "#d6d9da", sv), None
+
+
+def royal(u, v, r, a, su, sv, glints=True):
+    if glints and glint(su, sv, 0.30, -0.40, 0.11):
+        return WHITE, GLINT
+    if r > 0.70:
+        sheen = max(0.0, math.cos(math.atan2(sv, su) + 2.4)) ** 4
+        return mix(lit("#6b2026", "#a8434a", sv), hexc("#e3858a"), 0.6 * sheen), None
+    if r > 0.665:
+        return lit("#a7782a", "#efc35a", sv), None
+    if r > 0.56:
+        return hexc("#3f1015"), None
+    return mix(hexc("#d97a14"), hexc("#ffe04a"), 1 - smooth(r, 0.05, 0.5)), 0.62 + 0.38 * (1 - smooth(r, 0.0, 0.56))
+
+
 def blind(u, v, r, a, su, sv, glints=True):
     teeth = 0.5 + 0.5 * math.cos(a * 12 + 0.5)
     split = 0.18 - 0.22 * teeth * smooth(r, 0.25, 0.75)
@@ -352,7 +387,8 @@ def blind(u, v, r, a, su, sv, glints=True):
 DESIGNS = {"Bionic": (bionic, OUTLINE), "AdvancedBionic": (advanced, OUTLINE),
            "TacticalBionic": (tactical, OUTLINE), "Archotech": (archotech, hexc("#1d160b")),
            "Artificial": (artificial, hexc("#1c120b")), "Mechanical": (mechanical, OUTLINE),
-           "Paresian": (paresian, hexc("#1d160b")), "Blind": (blind, hexc("#252b31"))}
+           "Paresian": (paresian, hexc("#1d160b")), "Blind": (blind, hexc("#252b31")),
+           "LightReceptor": (receptor, OUTLINE), "RoyalBionic": (royal, hexc("#2a0a0e"))}
 
 
 def draw(name, eye, region):

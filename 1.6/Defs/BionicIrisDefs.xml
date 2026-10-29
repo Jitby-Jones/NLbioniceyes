@@ -78,6 +78,46 @@
   </BionicIrises.BionicIrisDef>
 
   <BionicIrises.BionicIrisDef>
+    <defName>BionicIris_LightReceptor</defName>
+    <label>light receptor iris</label>
+    <hediffs>
+      <li MayRequire="zal.eyeprosthetics">EPR_LightReceptor</li>
+    </hediffs>
+    <matchNames>
+      <li>light receptor</li>
+      <li>lightreceptor</li>
+    </matchNames>
+    <texPath>Things/Pawn/BionicIrises/LightReceptor</texPath>
+  </BionicIrises.BionicIrisDef>
+
+  <BionicIrises.BionicIrisDef>
+    <defName>BionicIris_RoyalBionic</defName>
+    <label>royal bionic eye iris</label>
+    <hediffs>
+      <li MayRequire="zal.eyeprosthetics,Ludeon.RimWorld.Royalty">EPR_RoyalBionicEye</li>
+    </hediffs>
+    <matchNames>
+      <li>royal bionic</li>
+      <li>royalbionic</li>
+    </matchNames>
+    <glowColor>(255,190,60)</glowColor>
+    <texPath>Things/Pawn/BionicIrises/RoyalBionic</texPath>
+  </BionicIrises.BionicIrisDef>
+
+  <BionicIrises.BionicIrisDef>
+    <defName>BionicIris_Glass</defName>
+    <label>glass eye</label>
+    <hediffs>
+      <li MayRequire="zal.eyeprosthetics">EPR_GlassEye</li>
+    </hediffs>
+    <matchNames>
+      <li>glass eye</li>
+      <li>glasseye</li>
+    </matchNames>
+    <naturalEye>true</naturalEye>
+  </BionicIrises.BionicIrisDef>
+
+  <BionicIrises.BionicIrisDef>
     <defName>BionicIris_Blind</defName>
     <label>blind eye iris</label>
     <blindEye>true</blindEye>
