@@ -332,20 +332,30 @@ def paresian(u, v, r, a, su, sv, glints=True):
     return hexc("#0b0e1f"), starlight(u, v, r, a)
 
 
+def grey(level):
+    return level, level, level
+
+
 def blind(u, v, r, a, su, sv, glints=True):
-    milk = lit("#b3bac1", "#e3e7ea", sv)
-    if r < 0.27:
-        return mix(milk, hexc("#8e979f"), 0.55 * (1 - r / 0.27) ** 0.5), None
-    if r > 0.60:
-        return mix(milk, hexc("#8c949b"), 0.4), None
-    cloud = (math.sin(u * 7 + math.sin(v * 5) * 1.3) + math.sin(v * 6 - u * 3) + 2) / 4
-    return mix(milk, hexc("#f2f4f5"), 0.45 * cloud), None
+    col = mix(grey(0.30), grey(0.44), (sv + 1) / 2)
+    col = mix(col, mix(grey(0.80), grey(0.95), (sv + 1) / 2), smooth(sv, 0.11, 0.21))
+    if -0.14 < sv < 0.16 and r < 0.82 and math.cos(su * 2 * math.pi / 0.30 + 0.4) > 0.3:
+        col = mix(col, grey(0.66), smooth(sv, -0.14, -0.06))
+    col = mix(col, grey(0.22), 0.5 * smooth(r, 0.70, 0.84))
+    q = math.atan2(v + 0.10, u)
+    rr = math.hypot(u, v + 0.10) / (0.26 * (1 + 0.05 * math.sin(3 * q + 0.7) + 0.04 * math.sin(5 * q + 2.1)))
+    col = mix(col, grey(0.30), 0.8 * smooth(rr, 0.92, 1.0) * (1 - smooth(rr, 1.25, 1.5)))
+    swirl = 0.5 + 0.5 * math.sin(u * 13 + 3 * math.sin(v * 9) + 0.4)
+    col = mix(col, grey(0.97 - 0.10 * swirl), 1 - smooth(rr, 0.8, 0.95))
+    if glints and (glint(su, sv, 0.30, -0.36, 0.13) or glint(su, sv, -0.36, 0.40, 0.06)):
+        col = mix(col, grey(1.0), 0.35)
+    return col, None
 
 
 DESIGNS = {"Bionic": (bionic, OUTLINE), "AdvancedBionic": (advanced, OUTLINE),
            "TacticalBionic": (tactical, OUTLINE), "Archotech": (archotech, hexc("#1d160b")),
            "Artificial": (artificial, hexc("#1c120b")), "Mechanical": (mechanical, OUTLINE),
-           "Paresian": (paresian, hexc("#1d160b")), "Blind": (blind, hexc("#3a4046"))}
+           "Paresian": (paresian, hexc("#1d160b")), "Blind": (blind, grey(0.12))}
 
 
 def draw(name, eye, region):

@@ -30,6 +30,8 @@ namespace BionicIrises
         public bool missingEye;
 
         public bool blindEye;
+
+        public float eyeColorTint;
     }
 
     public class BionicIrisSettings : ModSettings
@@ -577,6 +579,7 @@ namespace BionicIrises
                 rightColor = geneColor;
                 leftColor = geneColor;
             }
+            Color rightEyeColor = rightColor, leftEyeColor = leftColor;
             rightColor = Efficiency(pawn, rightEye, rightColor);
             leftColor = Efficiency(pawn, leftEye, leftColor);
 
@@ -589,6 +592,9 @@ namespace BionicIrises
                 Color color = rightColor;
                 rightColor = leftColor;
                 leftColor = color;
+                color = rightEyeColor;
+                rightEyeColor = leftEyeColor;
+                leftEyeColor = color;
                 leftPart = rightEye;
                 rightPart = leftEye;
             }
@@ -601,7 +607,7 @@ namespace BionicIrises
             string eyeShader = GraphicHelper.GetSkinShader(pawn, faceType);
             Color skin = SkinOf(pawn);
             if (leftIris != null && Replace(graphics, NLFacialAnimationLayerType.L_Basic, NLFacialAnimationLayerType.L_Option, leftIris, eyeShader, gender, "L", leftColor,
-                leftIris.missingEye ? skin : Color.white))
+                Tint(leftIris, skin, leftEyeColor)))
             {
                 irises.left = true;
                 irises.leftSocket = leftIris.missingEye;
@@ -610,7 +616,7 @@ namespace BionicIrises
                 irises.parts.Add(leftPart);
             }
             if (rightIris != null && Replace(graphics, NLFacialAnimationLayerType.R_Basic, NLFacialAnimationLayerType.R_Option, rightIris, eyeShader, gender, "R", rightColor,
-                rightIris.missingEye ? skin : Color.white))
+                Tint(rightIris, skin, rightEyeColor)))
             {
                 irises.right = true;
                 irises.rightSocket = rightIris.missingEye;
@@ -1057,6 +1063,14 @@ namespace BionicIrises
             }
             read[texture] = cover;
             return cover;
+        }
+
+        static Color Tint(BionicIrisDef iris, Color skin, Color eye)
+        {
+            if (iris.missingEye)
+                return skin;
+            float share = Mathf.Clamp01(iris.eyeColorTint);
+            return new Color(1f + (eye.r - 1f) * share, 1f + (eye.g - 1f) * share, 1f + (eye.b - 1f) * share);
         }
 
         static Color SkinOf(Pawn pawn)
