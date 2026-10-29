@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text;
 using FacialAnimation;
 using HarmonyLib;
 using RimWorld;
@@ -14,6 +16,8 @@ namespace BionicIrises
     public class BionicIrisDef : Def
     {
         public List<HediffDef> hediffs = new List<HediffDef>();
+
+        public List<string> matchNames = new List<string>();
 
         public string texPath;
 
@@ -172,6 +176,7 @@ namespace BionicIrises
                         MappedHediffs.Add(hediff);
                 }
             }
+            MatchByName();
             if (PawnField == null || FaceTypeField == null || GraphicListField == null || SecondColorField == null || CvtMainColor == null)
             {
                 Log.Error("[Bionic Irises] This Facial Animation version is not supported; iris sprites are off.");
@@ -205,6 +210,74 @@ namespace BionicIrises
                     Log.Error("[Bionic Irises] Could not read Facial Animation's lids, so the irises' lights are not cut to them: " + e);
                 }
             }
+        }
+
+        static void MatchByName()
+        {
+            var irises = new List<BionicIrisDef>();
+            foreach (BionicIrisDef def in DefDatabase<BionicIrisDef>.AllDefsListForReading)
+            {
+                if (def.matchNames.Count > 0)
+                    irises.Add(def);
+            }
+            if (irises.Count == 0)
+                return;
+            var eyes = new HashSet<HediffDef>();
+            foreach (RecipeDef recipe in DefDatabase<RecipeDef>.AllDefsListForReading)
+            {
+                if (recipe.addsHediff == null || recipe.appliedOnFixedBodyParts == null)
+                    continue;
+                foreach (BodyPartDef part in recipe.appliedOnFixedBodyParts)
+                {
+                    if (part != null && ((part.tags != null && part.tags.Contains(BodyPartTagDefOf.SightSource)) || Plain(part.defName).Contains("eye")))
+                        eyes.Add(recipe.addsHediff);
+                }
+            }
+            var matched = new List<string>();
+            foreach (HediffDef hediff in eyes)
+            {
+                if (MappedHediffs.Contains(hediff) || hediff.hediffClass == null || !typeof(Hediff_AddedPart).IsAssignableFrom(hediff.hediffClass))
+                    continue;
+                string names = Plain(hediff.defName) + " " + Plain(hediff.label);
+                if (names.Contains("patch"))
+                    continue;
+                foreach (BionicIrisDef iris in irises)
+                {
+                    bool found = false;
+                    foreach (string name in iris.matchNames)
+                        found |= names.Contains(Plain(name));
+                    if (!found)
+                        continue;
+                    iris.hediffs.Add(hediff);
+                    MappedHediffs.Add(hediff);
+                    matched.Add(hediff.defName + " (" + iris.defName + ")");
+                    break;
+                }
+            }
+            if (matched.Count > 0)
+                Log.Message("[Bionic Irises] Matched by name: " + string.Join(", ", matched.ToArray()));
+        }
+
+        static string Plain(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return "";
+            string lower = text.ToLowerInvariant();
+            try
+            {
+                lower = lower.Normalize(NormalizationForm.FormD);
+            }
+            catch (Exception)
+            {
+                return lower;
+            }
+            var plain = new StringBuilder(lower.Length);
+            foreach (char c in lower)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                    plain.Append(c);
+            }
+            return plain.ToString();
         }
 
         static bool Patch(Harmony harmony, MethodInfo target, string patch, bool prefix = false)

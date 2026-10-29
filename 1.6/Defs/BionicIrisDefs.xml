@@ -42,7 +42,11 @@
     <label>artificial eye iris</label>
     <hediffs>
       <li MayRequire="JoeDaly.MedMeds.MO">ArtificialMedEye</li>
+      <li MayRequire="NunahurAlShamikh.MedP">ArtificialMedEye</li>
     </hediffs>
+    <matchNames>
+      <li>artificial</li>
+    </matchNames>
     <texPath>Things/Pawn/BionicIrises/Artificial</texPath>
   </BionicIrises.BionicIrisDef>
 
@@ -51,7 +55,11 @@
     <label>mechanical eye iris</label>
     <hediffs>
       <li MayRequire="JoeDaly.MedMeds.MO">MechanicalMedEye</li>
+      <li MayRequire="NunahurAlShamikh.MedP">MechanicalMedEye</li>
     </hediffs>
+    <matchNames>
+      <li>mechanical</li>
+    </matchNames>
     <texPath>Things/Pawn/BionicIrises/Mechanical</texPath>
   </BionicIrises.BionicIrisDef>
 
@@ -60,7 +68,12 @@
     <label>Paresian eye iris</label>
     <hediffs>
       <li MayRequire="JoeDaly.MedMeds.MO">AmbroisenMedEye</li>
+      <li MayRequire="NunahurAlShamikh.MedP">AmbroisenMedEye</li>
     </hediffs>
+    <matchNames>
+      <li>paresian</li>
+      <li>ambroisen</li>
+    </matchNames>
     <texPath>Things/Pawn/BionicIrises/Paresian</texPath>
   </BionicIrises.BionicIrisDef>
 </Defs>

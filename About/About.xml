@@ -32,6 +32,7 @@
     <li>vat.epoeforked</li>
     <li>FrozenSnowFox.AdvancedBionicsExpansion</li>
     <li>JoeDaly.MedMeds.MO</li>
+    <li>NunahurAlShamikh.MedP</li>
   </loadAfter>
   <description>Overlays default organic facial animation irises with different graphics if bionics are installed.
 Glow is toggleable in config
