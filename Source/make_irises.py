@@ -332,30 +332,27 @@ def paresian(u, v, r, a, su, sv, glints=True):
     return hexc("#0b0e1f"), starlight(u, v, r, a)
 
 
-def grey(level):
-    return level, level, level
-
-
 def blind(u, v, r, a, su, sv, glints=True):
-    col = mix(grey(0.30), grey(0.44), (sv + 1) / 2)
-    col = mix(col, mix(grey(0.80), grey(0.95), (sv + 1) / 2), smooth(sv, 0.11, 0.21))
-    if -0.14 < sv < 0.16 and r < 0.82 and math.cos(su * 2 * math.pi / 0.30 + 0.4) > 0.3:
-        col = mix(col, grey(0.66), smooth(sv, -0.14, -0.06))
-    col = mix(col, grey(0.22), 0.5 * smooth(r, 0.70, 0.84))
-    q = math.atan2(v + 0.10, u)
-    rr = math.hypot(u, v + 0.10) / (0.26 * (1 + 0.05 * math.sin(3 * q + 0.7) + 0.04 * math.sin(5 * q + 2.1)))
-    col = mix(col, grey(0.30), 0.8 * smooth(rr, 0.92, 1.0) * (1 - smooth(rr, 1.25, 1.5)))
-    swirl = 0.5 + 0.5 * math.sin(u * 13 + 3 * math.sin(v * 9) + 0.4)
-    col = mix(col, grey(0.97 - 0.10 * swirl), 1 - smooth(rr, 0.8, 0.95))
-    if glints and (glint(su, sv, 0.30, -0.36, 0.13) or glint(su, sv, -0.36, 0.40, 0.06)):
-        col = mix(col, grey(1.0), 0.35)
+    teeth = 0.5 + 0.5 * math.cos(a * 12 + 0.5)
+    split = 0.18 - 0.22 * teeth * smooth(r, 0.25, 0.75)
+    col = mix(lit("#4a5561", "#6f7c8a", sv), lit("#a9b5c0", "#eaf0f4", sv), smooth(sv, split - 0.25, split + 0.25))
+    fibre = math.cos(a * 26 + 2.0 * math.sin(a * 7 + r * 6))
+    reach = smooth(r, 0.2, 0.8)
+    col = mix(col, hexc("#323b45"), 0.16 * max(0.0, fibre) * reach)
+    col = mix(col, hexc("#ffffff"), 0.8 * 0.16 * max(0.0, -fibre) * reach)
+    col = mix(col, hexc("#36404a"), 0.5 * smooth(r, 0.66, 0.84))
+    col = mix(col, hexc("#4f5a66"), 0.5 * (1 - smooth(math.hypot(u, v + 0.08), 0.14, 0.27)))
+    haze = (math.sin(u * 6.3 + 1.1 + math.sin(v * 4.1) * 1.4) + math.sin(v * 5.2 - u * 2.7 + 0.6) + 2) / 4
+    film = 0.12 + 0.30 * (1 - smooth(math.hypot(u + 0.04, v + 0.02), 0.05, 0.55))
+    col = mix(col, hexc("#e4eaef"), film * (0.55 + 0.45 * haze))
+    col = mix(col, hexc("#ffffff"), 0.45 * (1 - smooth(math.hypot(su - 0.30, sv + 0.36), 0.03, 0.22)))
     return col, None
 
 
 DESIGNS = {"Bionic": (bionic, OUTLINE), "AdvancedBionic": (advanced, OUTLINE),
            "TacticalBionic": (tactical, OUTLINE), "Archotech": (archotech, hexc("#1d160b")),
            "Artificial": (artificial, hexc("#1c120b")), "Mechanical": (mechanical, OUTLINE),
-           "Paresian": (paresian, hexc("#1d160b")), "Blind": (blind, grey(0.12))}
+           "Paresian": (paresian, hexc("#1d160b")), "Blind": (blind, hexc("#252b31"))}
 
 
 def draw(name, eye, region):

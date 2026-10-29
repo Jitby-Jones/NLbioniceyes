@@ -81,7 +81,6 @@
     <defName>BionicIris_Blind</defName>
     <label>blind eye iris</label>
     <blindEye>true</blindEye>
-    <eyeColorTint>0.4</eyeColorTint>
     <texPath>Things/Pawn/BionicIrises/Blind</texPath>
   </BionicIrises.BionicIrisDef>
 
