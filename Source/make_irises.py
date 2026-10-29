@@ -10,6 +10,8 @@ OUT = os.path.join(ROOT, "Textures", "Things", "Pawn", "BionicIrises")
 LAYOUT = os.path.join(ROOT, "1.6", "Defs", "BionicIrisLayouts.xml")
 EXPERIMENTALS = r"C:\Program Files (x86)\Steam\steamapps\workshop\content\294100\2581693737"
 NORMAL_EYE = ("Textures", "Things", "Pawn", "FA-Experimentals", "Eyes", "Normal")
+LIDS = ("Textures", "Things", "Pawn", "FA-Experimentals", "Lids")
+SCLERA = 0.1
 SS = 4
 PAD = 1
 GENDERS = ("Female", "Male")
@@ -176,6 +178,10 @@ def accent(v, lo=0.62):
 
 
 OUTLINE = hexc("#0b0c0e")
+SOCKET_DEEP = hexc("#0c0606")
+SOCKET_SHADE = hexc("#2a1616")
+SOCKET_LIT = hexc("#a4524a")
+SOCKET_EDGE = hexc("#efe9e6")
 WHITE = hexc("#f4f6f8")
 LAMP_OFF = hexc("#1a2027")
 GLINT = "glint"
@@ -326,10 +332,20 @@ def paresian(u, v, r, a, su, sv, glints=True):
     return hexc("#0b0e1f"), starlight(u, v, r, a)
 
 
+def blind(u, v, r, a, su, sv, glints=True):
+    milk = lit("#b3bac1", "#e3e7ea", sv)
+    if r < 0.27:
+        return mix(milk, hexc("#8e979f"), 0.55 * (1 - r / 0.27) ** 0.5), None
+    if r > 0.60:
+        return mix(milk, hexc("#8c949b"), 0.4), None
+    cloud = (math.sin(u * 7 + math.sin(v * 5) * 1.3) + math.sin(v * 6 - u * 3) + 2) / 4
+    return mix(milk, hexc("#f2f4f5"), 0.45 * cloud), None
+
+
 DESIGNS = {"Bionic": (bionic, OUTLINE), "AdvancedBionic": (advanced, OUTLINE),
            "TacticalBionic": (tactical, OUTLINE), "Archotech": (archotech, hexc("#1d160b")),
            "Artificial": (artificial, hexc("#1c120b")), "Mechanical": (mechanical, OUTLINE),
-           "Paresian": (paresian, hexc("#1d160b"))}
+           "Paresian": (paresian, hexc("#1d160b")), "Blind": (blind, hexc("#3a4046"))}
 
 
 def draw(name, eye, region):
@@ -374,11 +390,73 @@ def draw(name, eye, region):
     return base, glow_rows
 
 
-def write_layout(regions):
+def box(points):
+    return (min(x for x, _ in points), min(y for _, y in points), max(x for x, _ in points) + 1, max(y for _, y in points) + 1)
+
+
+def sclera(root, gender, rot):
+    whites, bare, opening = {}, {}, {}
+    folder = os.path.join(root, *LIDS)
+    for lid in sorted(os.listdir(folder)):
+        cover = os.path.join(folder, lid, gender, f"normal_cover_{rot}.png")
+        bottom = os.path.join(folder, lid, gender, f"normal_bottom_{rot}.png")
+        if not (os.path.exists(cover) and os.path.exists(bottom)):
+            continue
+        shut, white = read_png(cover)[0], read_png(bottom)[0]
+        for side in (("L", "R") if rot == "south" else ("side",)):
+            for y in range(200, 360):
+                for x in range(512):
+                    if not (side == "side" or (x < 256) == (side == "L")):
+                        continue
+                    if white[y][x] > SCLERA:
+                        seen = whites.setdefault(side, {})
+                        seen[(x, y)] = max(seen.get((x, y), 0.0), white[y][x])
+                        if lid == "Normal" and shut[y][x] < 0.5:
+                            opening.setdefault(side, []).append((x, y))
+                    elif shut[y][x] < 0.5:
+                        bare.setdefault(side, set()).add((x, y))
+    return whites, bare, {side: box(points) for side, points in opening.items()}
+
+
+def smooth(v, lo, hi):
+    t = min(1.0, max(0.0, (v - lo) / (hi - lo)))
+    return t * t * (3 - 2 * t)
+
+
+def grow(points):
+    return {(x + i, y + j) for x, y in points for j in (-1, 0, 1) for i in (-1, 0, 1)}
+
+
+def socket(region, white, bare, opening):
+    x0, y0, x1, y1 = region
+    ox0, oy0, ox1, oy1 = opening
+    cx, cy, hx, hy = (ox0 + ox1) / 2, (oy0 + oy1) / 2, (ox1 - ox0) / 2, (oy1 - oy0) / 2
+    solid = grow(white)
+    rows = []
+    for y in range(y0, y1):
+        row = bytearray()
+        for x in range(x0, x1):
+            near = min([math.hypot(x - bx, y - by) for by in range(y - 3, y + 4) for bx in range(x - 3, x + 4) if (bx, by) in bare] + [4.0])
+            fade = smooth(white.get((x, y), 0.0), SCLERA, 0.9) * smooth(near, 0.5, 3.0)
+            total = [0.0, 0.0, 0.0]
+            for sy in range(SS):
+                for sx in range(SS):
+                    dx, dy = (x + (sx + 0.5) / SS - cx) / hx, (y + (sy + 0.5) / SS - cy) / hy
+                    d = min(1.0, math.hypot(dx, dy))
+                    wall = mix(SOCKET_SHADE, SOCKET_LIT, 0.85 * smooth(dy, 0.1, 0.8))
+                    hollow = mix(wall, SOCKET_DEEP, max(0.7 * smooth(-dy, 0.0, 0.8), 0.6 * (1 - d) ** 2))
+                    total = [t + c for t, c in zip(total, mix(SOCKET_EDGE, hollow, fade))]
+            row += bytes(round(t / (SS * SS) * 255) for t in total) + (b"\xff" if (x, y) in solid else b"\x00")
+        rows.append(row)
+    return rows
+
+
+def write_layout(regions, sockets):
     lines = ['<?xml version="1.0" encoding="utf-8"?>',
              "<Defs>"]
     for gender in GENDERS:
         (lx0, ly0, lx1, ly1), (rx0, ry0, _, _), (sx0, sy0, sx1, sy1) = (regions[(gender, v)] for v, _ in VIEWS)
+        (kx0, ky0, kx1, ky1), (jx0, jy0, _, _), (tx0, ty0, tx1, ty1) = (sockets[(gender, v)] for v, _ in VIEWS)
         lines += ["  <BionicIrises.BionicIrisLayoutDef>",
                   f"    <defName>BionicIrisLayout_{gender}</defName>",
                   f"    <gender>{gender}</gender>",
@@ -387,6 +465,11 @@ def write_layout(regions):
                   f"    <frontSize>({lx1 - lx0},{ly1 - ly0})</frontSize>",
                   f"    <side>({sx0},{sy0})</side>",
                   f"    <sideSize>({sx1 - sx0},{sy1 - sy0})</sideSize>",
+                  f"    <leftSocket>({kx0},{ky0})</leftSocket>",
+                  f"    <rightSocket>({jx0},{jy0})</rightSocket>",
+                  f"    <socketSize>({kx1 - kx0},{ky1 - ky0})</socketSize>",
+                  f"    <sideSocket>({tx0},{ty0})</sideSocket>",
+                  f"    <sideSocketSize>({tx1 - tx0},{ty1 - ty0})</sideSocketSize>",
                   "  </BionicIrises.BionicIrisLayoutDef>"]
     lines.append("</Defs>")
     with open(LAYOUT, "w", encoding="utf-8", newline="\n") as fh:
@@ -397,8 +480,14 @@ def blocks(n):
     return n + -n % 4
 
 
+def pair(left, right):
+    (lx0, ly0, lx1, ly1), (rx0, ry0, rx1, ry1) = left, right
+    w, h, top = blocks(max(lx1 - lx0, rx1 - rx0)), blocks(max(ly1, ry1) - min(ly0, ry0)), min(ly0, ry0)
+    return (lx1 - w, top, lx1, top + h), (rx0, top, rx0 + w, top + h)
+
+
 def build(root):
-    eyes, regions = {}, {}
+    eyes, regions, sockets, whites, skins, shapes = {}, {}, {}, {}, {}, {}
     for gender in GENDERS:
         folder = os.path.join(root, *NORMAL_EYE, gender)
         south = read_png(os.path.join(folder, "normal_south.png"))
@@ -409,10 +498,18 @@ def build(root):
             regions[(gender, view)] = (x0 - PAD, y0 - PAD, x1 + PAD, y1 + PAD)
         x0, y0, x1, y1 = regions[(gender, "side")]
         regions[(gender, "side")] = (x0, y0, x0 + blocks(x1 - x0), y0 + blocks(y1 - y0))
-        (lx0, ly0, lx1, ly1), (rx0, ry0, rx1, ry1) = regions[(gender, "L")], regions[(gender, "R")]
-        w, h, top = blocks(max(lx1 - lx0, rx1 - rx0)), blocks(max(ly1, ry1) - min(ly0, ry0)), min(ly0, ry0)
-        regions[(gender, "L")] = (lx1 - w, top, lx1, top + h)
-        regions[(gender, "R")] = (rx0, top, rx0 + w, top + h)
+        regions[(gender, "L")], regions[(gender, "R")] = pair(regions[(gender, "L")], regions[(gender, "R")])
+        for rot in ("south", "east"):
+            found, bare, opening = sclera(root, gender, rot)
+            for view, white in found.items():
+                x0, y0, x1, y1 = box(grow(white))
+                sockets[(gender, view)] = (x0 - PAD, y0 - PAD, x1 + PAD, y1 + PAD)
+                whites[(gender, view)] = white
+                skins[(gender, view)] = bare.get(view, set())
+                shapes[(gender, view)] = opening[view]
+        x0, y0, x1, y1 = sockets[(gender, "side")]
+        sockets[(gender, "side")] = (x0, y0, x0 + blocks(x1 - x0), y0 + blocks(y1 - y0))
+        sockets[(gender, "L")], sockets[(gender, "R")] = pair(sockets[(gender, "L")], sockets[(gender, "R")])
     count = 0
     for name in DESIGNS:
         for gender in GENDERS:
@@ -424,9 +521,20 @@ def build(root):
                     save_png(os.path.join(d, f"normal_{side}_{rot}.png"), base)
                     save_png(os.path.join(d, f"normal_{side}_glow_{rot}.png"), glow)
                     count += 2
+    for gender in GENDERS:
+        d = os.path.join(OUT, "Eyeless", gender)
+        os.makedirs(d, exist_ok=True)
+        for view, rot in VIEWS:
+            x0, y0, x1, y1 = sockets[(gender, view)]
+            base = socket(sockets[(gender, view)], whites[(gender, view)], skins[(gender, view)], shapes[(gender, view)])
+            glow = [bytearray(b"\xff\xff\xff\x00" * (x1 - x0)) for _ in range(y1 - y0)]
+            for side in (("L", "R") if view == "side" else (view,)):
+                save_png(os.path.join(d, f"normal_{side}_{rot}.png"), base)
+                save_png(os.path.join(d, f"normal_{side}_glow_{rot}.png"), glow)
+                count += 2
     for rot in ("south", "east"):
         save_png(os.path.join(OUT, f"Mask_{rot}.png"), [bytearray(b"\xff" * 16) for _ in range(4)])
-    write_layout(regions)
+    write_layout(regions, sockets)
     print(f"wrote {count} textures and the mask to {os.path.normpath(OUT)}, and the layout")
 
 

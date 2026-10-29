@@ -26,6 +26,10 @@ namespace BionicIrises
         public string litShader = "Map/Transparent";
 
         public int priority;
+
+        public bool missingEye;
+
+        public bool blindEye;
     }
 
     public class BionicIrisSettings : ModSettings
@@ -76,8 +80,27 @@ namespace BionicIrises
         public Vector2 frontSize;
         public Vector2 side;
         public Vector2 sideSize;
+        public Vector2 leftSocket;
+        public Vector2 rightSocket;
+        public Vector2 socketSize;
+        public Vector2 sideSocket;
+        public Vector2 sideSocketSize;
 
-        internal static Rect Uv(Vector2 corner, Vector2 size)
+        internal Rect Front(bool isLeft, bool socket)
+        {
+            if (socket && socketSize.x > 0f && socketSize.y > 0f)
+                return Uv(isLeft ? leftSocket : rightSocket, socketSize);
+            return Uv(isLeft ? left : right, frontSize);
+        }
+
+        internal Rect Side(bool socket)
+        {
+            if (socket && sideSocketSize.x > 0f && sideSocketSize.y > 0f)
+                return Uv(sideSocket, sideSocketSize);
+            return Uv(side, sideSize);
+        }
+
+        static Rect Uv(Vector2 corner, Vector2 size)
         {
             return new Rect(corner.x / 512f, 1f - (corner.y + size.y) / 512f, size.x / 512f, size.y / 512f);
         }
@@ -98,6 +121,8 @@ namespace BionicIrises
 
         static readonly HashSet<HediffDef> MappedHediffs = new HashSet<HediffDef>();
 
+        static BionicIrisDef MissingIris, BlindIris;
+
         static readonly ConditionalWeakTable<EyeballControllerComp, Irises> Fitted = new ConditionalWeakTable<EyeballControllerComp, Irises>();
         static readonly ConditionalWeakTable<Pawn, Irises> FittedPawns = new ConditionalWeakTable<Pawn, Irises>();
 
@@ -117,7 +142,8 @@ namespace BionicIrises
         sealed class Irises
         {
             public bool left, right;
-            public Rect leftUv, rightUv, sideUv;
+            public bool leftSocket, rightSocket;
+            public Rect leftUv, rightUv, leftSideUv, rightSideUv;
             public EyeballControllerComp eyes;
             public LidControllerComp lids;
             public Gender gender;
@@ -175,6 +201,10 @@ namespace BionicIrises
                     if (hediff != null)
                         MappedHediffs.Add(hediff);
                 }
+                if (def.missingEye && (MissingIris == null || def.priority > MissingIris.priority))
+                    MissingIris = def;
+                if (def.blindEye && (BlindIris == null || def.priority > BlindIris.priority))
+                    BlindIris = def;
             }
             MatchByName();
             if (PawnField == null || FaceTypeField == null || GraphicListField == null || SecondColorField == null || CvtMainColor == null)
@@ -189,13 +219,14 @@ namespace BionicIrises
             Patch(harmony, AccessTools.Method(typeof(EyeballControllerComp), "LoadTextures"), "LoadTexturesPostfix");
             Patch(harmony, AccessTools.Method(typeof(AnimationFrameMapper), "ApplyFrame"), "ApplyFramePostfix");
             Patch(harmony, AccessTools.Method(typeof(PawnRenderNodeWorker), "CanDrawNow"), "CanDrawNowPostfix");
-            foreach (string name in new[] { "AddHediff", "RemoveHediff" })
+            foreach (string name in new[] { "AddHediff", "RemoveHediff", "RestorePart" })
             {
-                List<MethodInfo> overloads = HediffMethods(name);
+                bool restore = name == "RestorePart";
+                List<MethodInfo> overloads = HealthMethods(name, restore ? typeof(BodyPartRecord) : typeof(Hediff));
                 if (overloads.Count == 0)
                     Patch(harmony, null, name);
                 foreach (MethodInfo method in overloads)
-                    Patch(harmony, method, "HediffChangedPostfix");
+                    Patch(harmony, method, restore ? "RestorePartPostfix" : "HediffChangedPostfix");
             }
             if (DrawsPieces && LidTypeField != null && LidShapeField != null
                 && Patch(harmony, AccessTools.Method(typeof(PawnRenderTree), "Draw", new[] { typeof(PawnDrawParms) }), "DrawPrefix", true))
@@ -300,13 +331,13 @@ namespace BionicIrises
             }
         }
 
-        static List<MethodInfo> HediffMethods(string name)
+        static List<MethodInfo> HealthMethods(string name, Type first)
         {
             var found = new List<MethodInfo>();
             foreach (MethodInfo method in typeof(Pawn_HealthTracker).GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly))
             {
                 ParameterInfo[] parameters = method.GetParameters();
-                if (method.Name == name && parameters.Length > 0 && parameters[0].ParameterType == typeof(Hediff))
+                if (method.Name == name && parameters.Length > 0 && parameters[0].ParameterType == first)
                     found.Add(method);
             }
             return found;
@@ -386,7 +417,7 @@ namespace BionicIrises
             if (facing == Rot4.South)
                 uv = left ? irises.leftUv : irises.rightUv;
             else if (facing == (left ? Rot4.East : Rot4.West))
-                uv = irises.sideUv;
+                uv = left ? irises.leftSideUv : irises.rightSideUv;
             else
             {
                 requests.RemoveAt(last);
@@ -457,7 +488,7 @@ namespace BionicIrises
                     NLFacialAnimationLayerType layer = left ? (lights ? NLFacialAnimationLayerType.L_Option : NLFacialAnimationLayerType.L_Basic)
                         : (lights ? NLFacialAnimationLayerType.R_Option : NLFacialAnimationLayerType.R_Basic);
                     Vector3 eye = ((IFacialAnimationController)irises.eyes).GetOffset(layer, parms.Portrait, parms.facing);
-                    Cut(clip, CoverFor(irises, shape, clip.side), eye - lids, lights);
+                    Cut(clip, CoverFor(irises, shape, clip.side), eye - lids, lights, left ? irises.leftSocket : irises.rightSocket);
                 }
             }
             catch (Exception e)
@@ -477,19 +508,21 @@ namespace BionicIrises
             return covers[(irises.gender == Gender.Female ? 2 : 0) + (side ? 1 : 0)];
         }
 
-        static void Cut(Clip clip, Cover cover, Vector3 delta, bool lights)
+        static void Cut(Clip clip, Cover cover, Vector3 delta, bool lights, bool anchored)
         {
             HeadQuad head = QuadOf(clip.head);
             if (head == null)
                 return;
             Vector3 across = head.corners[1] - head.corners[0], up = head.corners[2] - head.corners[0];
-            if (Mathf.Abs(across.x) < 1e-5f || Mathf.Abs(up.z) < 1e-5f)
+            bool flat = Mathf.Abs(across.x) < 1e-5f || Mathf.Abs(up.z) < 1e-5f;
+            if (flat)
                 cover = null;
-            int x = cover == null ? 0 : Mathf.RoundToInt(delta.x / across.x * 512f * Steps);
-            int y = cover == null ? 0 : -Mathf.RoundToInt(delta.z / up.z * 512f * Steps);
+            bool moves = !flat && (cover != null || anchored);
+            int x = moves ? Mathf.RoundToInt(delta.x / across.x * 512f * Steps) : 0;
+            int y = moves ? -Mathf.RoundToInt(delta.z / up.z * 512f * Steps) : 0;
             if (clip.IsBuilt(clip.head, clip.uv, cover, x, y))
                 return;
-            Fill(clip.mesh, head, clip.uv, cover == null ? null : lights ? cover.lights : cover.iris, cover, x, y);
+            Fill(clip.mesh, head, clip.uv, cover == null ? null : lights ? cover.lights : cover.iris, cover, x, y, anchored);
             clip.Built(clip.head, clip.uv, cover, x, y);
         }
 
@@ -561,24 +594,32 @@ namespace BionicIrises
             }
             var irises = new Irises
             {
-                leftUv = BionicIrisLayoutDef.Uv(layout.left, layout.frontSize),
-                rightUv = BionicIrisLayoutDef.Uv(layout.right, layout.frontSize),
-                sideUv = BionicIrisLayoutDef.Uv(layout.side, layout.sideSize),
                 eyes = comp,
                 lids = pawn.GetComp<LidControllerComp>(),
                 gender = pawn.gender == Gender.Female ? Gender.Female : Gender.Male,
             };
             string eyeShader = GraphicHelper.GetSkinShader(pawn, faceType);
-            if (leftIris != null)
-                irises.left = Replace(graphics, NLFacialAnimationLayerType.L_Basic, NLFacialAnimationLayerType.L_Option, leftIris, eyeShader, gender, "L", leftColor);
-            if (rightIris != null)
-                irises.right = Replace(graphics, NLFacialAnimationLayerType.R_Basic, NLFacialAnimationLayerType.R_Option, rightIris, eyeShader, gender, "R", rightColor);
+            Color skin = SkinOf(pawn);
+            if (leftIris != null && Replace(graphics, NLFacialAnimationLayerType.L_Basic, NLFacialAnimationLayerType.L_Option, leftIris, eyeShader, gender, "L", leftColor,
+                leftIris.missingEye ? skin : Color.white))
+            {
+                irises.left = true;
+                irises.leftSocket = leftIris.missingEye;
+                irises.leftUv = layout.Front(true, leftIris.missingEye);
+                irises.leftSideUv = layout.Side(leftIris.missingEye);
+                irises.parts.Add(leftPart);
+            }
+            if (rightIris != null && Replace(graphics, NLFacialAnimationLayerType.R_Basic, NLFacialAnimationLayerType.R_Option, rightIris, eyeShader, gender, "R", rightColor,
+                rightIris.missingEye ? skin : Color.white))
+            {
+                irises.right = true;
+                irises.rightSocket = rightIris.missingEye;
+                irises.rightUv = layout.Front(false, rightIris.missingEye);
+                irises.rightSideUv = layout.Side(rightIris.missingEye);
+                irises.parts.Add(rightPart);
+            }
             if (!irises.left && !irises.right)
                 return;
-            if (irises.left)
-                irises.parts.Add(leftPart);
-            if (irises.right)
-                irises.parts.Add(rightPart);
             irises.clips = ClipsFor(previous);
             PreparePieces(pawn, irises);
             Fitted.Add(comp, irises);
@@ -606,11 +647,34 @@ namespace BionicIrises
 
         internal static void Refresh(Pawn pawn, Hediff hediff)
         {
-            if (pawn == null || hediff == null || !MappedHediffs.Contains(hediff.def))
+            if (pawn == null || hediff == null || !(MappedHediffs.Contains(hediff.def) || OnEye(hediff.Part)))
                 return;
             EyeballControllerComp comp = pawn.GetComp<EyeballControllerComp>();
             if (comp != null)
                 Reload(pawn, comp);
+        }
+
+        static bool OnEye(BodyPartRecord part)
+        {
+            return (MissingIris != null || BlindIris != null) && part != null && part.def != null && part.def.tags != null
+                && part.def.tags.Contains(BodyPartTagDefOf.SightSource);
+        }
+
+        static void RestorePartPostfix(Pawn_HealthTracker __instance)
+        {
+            Irises irises;
+            if (Disabled || __instance == null || __instance.hediffSet == null || __instance.hediffSet.pawn == null
+                || !FittedPawns.TryGetValue(__instance.hediffSet.pawn, out irises))
+                return;
+            try
+            {
+                Reload(__instance.hediffSet.pawn, irises.eyes);
+            }
+            catch (Exception e)
+            {
+                Disabled = true;
+                Log.Error("[Bionic Irises] Turned off after an error (Facial Animation may have changed): " + e);
+            }
         }
 
         internal static void ReloadAll()
@@ -643,12 +707,12 @@ namespace BionicIrises
 
         static bool Replace(Dictionary<NLFacialAnimationLayerType, NLGraphic_Collection<EyeballShapeDef>> graphics,
             NLFacialAnimationLayerType basic, NLFacialAnimationLayerType highlight, BionicIrisDef iris, string eyeShader,
-            string gender, string side, Color accent)
+            string gender, string side, Color accent, Color tint)
         {
             string tex = iris.texPath + "/" + gender + "/{0}_" + side;
             if (!GraphicHelper.CheckTexPathExist(string.Format(tex, "normal")))
                 return false;
-            graphics[basic] = Collection(new NLGraphicParam(eyeShader, tex, WhiteMask, Color.white, Color.white));
+            graphics[basic] = Collection(new NLGraphicParam(eyeShader, tex, WhiteMask, tint, Color.white));
             string lights = BionicIrisesMod.Settings == null || BionicIrisesMod.Settings.glow ? iris.glowShader : iris.litShader;
             graphics[highlight] = Collection(new NLGraphicParam(lights, tex + "_glow", null, Glow(accent), Color.white));
             return true;
@@ -678,10 +742,15 @@ namespace BionicIrises
                 if (head == null)
                     continue;
                 if (irises.left)
+                {
                     MakePiece(head, irises.leftUv);
+                    MakePiece(head, irises.leftSideUv);
+                }
                 if (irises.right)
+                {
                     MakePiece(head, irises.rightUv);
-                MakePiece(head, irises.sideUv);
+                    MakePiece(head, irises.rightSideUv);
+                }
             }
         }
 
@@ -715,7 +784,7 @@ namespace BionicIrises
                 {
                     piece = new Mesh();
                     piece.name = "BionicIrisPiece";
-                    Fill(piece, quad, uv, null, null, 0, 0);
+                    Fill(piece, quad, uv, null, null, 0, 0, false);
                 }
                 pieces[uv] = piece;
                 return piece;
@@ -761,9 +830,15 @@ namespace BionicIrises
         static readonly List<Vector2> FillUvs = new List<Vector2>();
         static readonly List<int> FillTriangles = new List<int>(), FillRuns = new List<int>(), FillBand = new List<int>();
 
-        static void Fill(Mesh mesh, HeadQuad head, Rect uv, int[][] open, Cover cover, int dx, int dy)
+        static void Fill(Mesh mesh, HeadQuad head, Rect uv, int[][] open, Cover cover, int dx, int dy, bool anchored)
         {
             int columns = Mathf.RoundToInt(uv.width * 512f) * Steps, rows = Mathf.RoundToInt(uv.height * 512f) * Steps;
+            Vector2 shift = anchored ? new Vector2(-dx, dy) / (512f * Steps) : Vector2.zero;
+            if (anchored)
+            {
+                dx = 0;
+                dy = 0;
+            }
             List<Vector3> vertices = FillVertices;
             List<Vector2> uvs = FillUvs;
             List<int> triangles = FillTriangles, runs = FillRuns, band = FillBand;
@@ -771,7 +846,7 @@ namespace BionicIrises
             uvs.Clear();
             triangles.Clear();
             if (open == null)
-                AddQuad(head, uv, columns, rows, 0, 0, columns, rows, vertices, uvs, triangles);
+                AddQuad(head, uv, shift, columns, rows, 0, 0, columns, rows, vertices, uvs, triangles);
             else
             {
                 int rowShift = (Mathf.RoundToInt((1f - uv.yMax) * 512f) - cover.y0) * Steps + dy;
@@ -798,7 +873,7 @@ namespace BionicIrises
                     if (row < rows && SameRuns(runs, band))
                         continue;
                     for (int i = 0; i < band.Count; i += 2)
-                        AddQuad(head, uv, columns, rows, band[i], bandTop, band[i + 1], row, vertices, uvs, triangles);
+                        AddQuad(head, uv, shift, columns, rows, band[i], bandTop, band[i + 1], row, vertices, uvs, triangles);
                     band.Clear();
                     band.AddRange(runs);
                     bandTop = row;
@@ -864,7 +939,7 @@ namespace BionicIrises
             return true;
         }
 
-        static void AddQuad(HeadQuad head, Rect uv, int columns, int rows, int left, int top, int right, int bottom,
+        static void AddQuad(HeadQuad head, Rect uv, Vector2 shift, int columns, int rows, int left, int top, int right, int bottom,
             List<Vector3> vertices, List<Vector2> uvs, List<int> triangles)
         {
             int start = vertices.Count;
@@ -872,7 +947,7 @@ namespace BionicIrises
             {
                 float u = ((corner & 1) == 0 ? left : right) / (float)columns;
                 float v = 1f - ((corner & 2) == 0 ? bottom : top) / (float)rows;
-                float headU = uv.xMin + u * uv.width, headV = uv.yMin + v * uv.height;
+                float headU = uv.xMin + u * uv.width + shift.x, headV = uv.yMin + v * uv.height + shift.y;
                 vertices.Add(Vector3.Lerp(Vector3.Lerp(head.corners[0], head.corners[1], headU), Vector3.Lerp(head.corners[2], head.corners[3], headU), headV));
                 uvs.Add(new Vector2(u, v));
             }
@@ -889,6 +964,9 @@ namespace BionicIrises
                 Grow(ref windows[0], layout.left, layout.frontSize, margin);
                 Grow(ref windows[0], layout.right, layout.frontSize, margin);
                 Grow(ref windows[1], layout.side, layout.sideSize, margin);
+                Grow(ref windows[0], layout.leftSocket, layout.socketSize, margin);
+                Grow(ref windows[0], layout.rightSocket, layout.socketSize, margin);
+                Grow(ref windows[1], layout.sideSocket, layout.sideSocketSize, margin);
             }
             if (windows[0] == null || windows[1] == null)
                 return;
@@ -922,6 +1000,8 @@ namespace BionicIrises
 
         static void Grow(ref int[] window, Vector2 corner, Vector2 size, int margin)
         {
+            if (size.x <= 0f || size.y <= 0f)
+                return;
             int left = Mathf.FloorToInt(corner.x) - margin, top = Mathf.FloorToInt(corner.y) - margin;
             int right = Mathf.CeilToInt(corner.x + size.x) + margin, bottom = Mathf.CeilToInt(corner.y + size.y) + margin;
             if (window == null)
@@ -979,6 +1059,15 @@ namespace BionicIrises
             return cover;
         }
 
+        static Color SkinOf(Pawn pawn)
+        {
+            HeadControllerComp head = pawn.GetComp<HeadControllerComp>();
+            Color color = head != null ? head.GetCurrentColor() : Color.clear;
+            if (color.a > 0f)
+                return color;
+            return pawn.story != null ? pawn.story.SkinColor : Color.white;
+        }
+
         static Color Glow(Color color)
         {
             float max = Mathf.Max(color.r, Mathf.Max(color.g, color.b));
@@ -1000,9 +1089,14 @@ namespace BionicIrises
             if (eye == null)
                 return null;
             BionicIrisDef best = null;
+            bool natural = true;
             foreach (Hediff hediff in pawn.health.hediffSet.hediffs)
             {
-                if (hediff.Part != eye || !MappedHediffs.Contains(hediff.def))
+                if (hediff.Part != eye)
+                    continue;
+                if (hediff is Hediff_AddedPart)
+                    natural = false;
+                if (!MappedHediffs.Contains(hediff.def))
                     continue;
                 foreach (BionicIrisDef def in DefDatabase<BionicIrisDef>.AllDefsListForReading)
                 {
@@ -1010,7 +1104,13 @@ namespace BionicIrises
                         best = def;
                 }
             }
-            return best;
+            if (best != null || !natural)
+                return best;
+            if (pawn.health.hediffSet.PartIsMissing(eye))
+                return MissingIris;
+            if (BlindIris != null && PawnCapacityUtility.CalculatePartEfficiency(pawn.health.hediffSet, eye, false, null) <= 0f)
+                return BlindIris;
+            return null;
         }
 
         static bool GeneEyeColor(Pawn pawn, out Color color)

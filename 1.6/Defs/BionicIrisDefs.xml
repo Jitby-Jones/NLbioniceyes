@@ -76,4 +76,18 @@
     </matchNames>
     <texPath>Things/Pawn/BionicIrises/Paresian</texPath>
   </BionicIrises.BionicIrisDef>
+
+  <BionicIrises.BionicIrisDef>
+    <defName>BionicIris_Blind</defName>
+    <label>blind eye iris</label>
+    <blindEye>true</blindEye>
+    <texPath>Things/Pawn/BionicIrises/Blind</texPath>
+  </BionicIrises.BionicIrisDef>
+
+  <BionicIrises.BionicIrisDef>
+    <defName>BionicIris_Eyeless</defName>
+    <label>empty eye socket</label>
+    <missingEye>true</missingEye>
+    <texPath>Things/Pawn/BionicIrises/Eyeless</texPath>
+  </BionicIrises.BionicIrisDef>
 </Defs>

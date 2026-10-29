@@ -8,6 +8,11 @@
     <frontSize>(28,28)</frontSize>
     <side>(284,265)</side>
     <sideSize>(20,28)</sideSize>
+    <leftSocket>(202,266)</leftSocket>
+    <rightSocket>(270,266)</rightSocket>
+    <socketSize>(40,28)</socketSize>
+    <sideSocket>(276,263)</sideSocket>
+    <sideSocketSize>(28,32)</sideSocketSize>
   </BionicIrises.BionicIrisLayoutDef>
   <BionicIrises.BionicIrisLayoutDef>
     <defName>BionicIrisLayout_Male</defName>
@@ -17,5 +22,10 @@
     <frontSize>(28,24)</frontSize>
     <side>(283,266)</side>
     <sideSize>(20,28)</sideSize>
+    <leftSocket>(200,266)</leftSocket>
+    <rightSocket>(268,266)</rightSocket>
+    <socketSize>(44,28)</socketSize>
+    <sideSocket>(274,268)</sideSocket>
+    <sideSocketSize>(32,24)</sideSocketSize>
   </BionicIrises.BionicIrisLayoutDef>
 </Defs>
