@@ -36,4 +36,31 @@
     </hediffs>
     <texPath>Things/Pawn/BionicIrises/Archotech</texPath>
   </BionicIrises.BionicIrisDef>
+
+  <BionicIrises.BionicIrisDef>
+    <defName>BionicIris_Artificial</defName>
+    <label>artificial eye iris</label>
+    <hediffs>
+      <li MayRequire="JoeDaly.MedMeds.MO">ArtificialMedEye</li>
+    </hediffs>
+    <texPath>Things/Pawn/BionicIrises/Artificial</texPath>
+  </BionicIrises.BionicIrisDef>
+
+  <BionicIrises.BionicIrisDef>
+    <defName>BionicIris_Mechanical</defName>
+    <label>mechanical eye iris</label>
+    <hediffs>
+      <li MayRequire="JoeDaly.MedMeds.MO">MechanicalMedEye</li>
+    </hediffs>
+    <texPath>Things/Pawn/BionicIrises/Mechanical</texPath>
+  </BionicIrises.BionicIrisDef>
+
+  <BionicIrises.BionicIrisDef>
+    <defName>BionicIris_Paresian</defName>
+    <label>Paresian eye iris</label>
+    <hediffs>
+      <li MayRequire="JoeDaly.MedMeds.MO">AmbroisenMedEye</li>
+    </hediffs>
+    <texPath>Things/Pawn/BionicIrises/Paresian</texPath>
+  </BionicIrises.BionicIrisDef>
 </Defs>

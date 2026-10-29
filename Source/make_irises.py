@@ -247,8 +247,59 @@ def archotech(u, v, r, a, su, sv, glints=True):
     return lit("#c8c3b4", "#f3efe4", sv), None
 
 
+def artificial(u, v, r, a, su, sv, glints=True):
+    if glints and glint(su, sv, 0.30, -0.38, 0.13):
+        return hexc("#efe4cf"), GLINT
+    wood = lit("#5b3a20", "#8f6239", sv)
+    if r > 0.70:
+        return (hexc("#3f2715") if math.sin(sv * 21 + math.sin(su * 6) * 1.6) > 0.6 else wood), None
+    if r > 0.64:
+        return hexc("#2b2f36"), None
+    if r < 0.30:
+        return hexc("#1a1210"), None
+    if r > 0.50 and any(abs(math.remainder(a - k, 2 * math.pi)) < 0.16 for k in (2.5, 5.75)):
+        return wood, None
+    if math.cos(a * 9 + r * 4) > 0.55:
+        return hexc("#3b536b"), None
+    return lit("#4b6a86", "#88a4b9", sv), None
+
+
+def mechanical(u, v, r, a, su, sv, glints=True):
+    if glints and (glint(su, sv, 0.30, -0.36, 0.13) or glint(su, sv, -0.36, 0.40, 0.06)):
+        return WHITE, GLINT
+    if r > 0.66:
+        if r > 0.72 and any(abs(math.remainder(a - k, 2 * math.pi)) < 0.2 for k in (0.785, 2.356, 3.927, 5.498)):
+            return lit("#7a5a20", "#d0a54e", sv), None
+        return lit("#474c52", "#a7afb7", sv), None
+    if r < 0.14:
+        return lit("#8a6a28", "#e6c062", sv), None
+    if r < 0.30:
+        return hexc("#0c0e11"), None
+    if any(abs(math.remainder(a - k * math.pi / 3 - math.pi / 6, 2 * math.pi)) < 0.16 for k in range(6)):
+        return lit("#4a5056", "#9aa2aa", sv), None
+    return lit("#2a4361", "#5d82aa", sv), None
+
+
+def paresian(u, v, r, a, su, sv, glints=True):
+    if glints and glint(su, sv, 0.30, -0.40, 0.14):
+        return WHITE, GLINT
+    if r > 0.70:
+        if r > 0.75 and any(abs(math.remainder(a - k, 2 * math.pi)) < 0.17 for k in (0.785, 2.356, 3.927, 5.498)):
+            return lit("#0d6a3a", "#45d988", sv), None
+        return lit("#7e6026", "#e2bd60", sv), None
+    if r > 0.64:
+        return lit("#8d949c", "#e6ebf0", sv), None
+    if r < 0.27:
+        return hexc("#0b0a10"), None
+    color, level = accent(sv, 0.7)
+    level *= 0.84 + 0.16 * (math.cos(a * 11) + 1) / 2
+    return color, min(1.0, level + max(0.0, 0.36 - r) * 2.0)
+
+
 DESIGNS = {"Bionic": (bionic, OUTLINE), "AdvancedBionic": (advanced, OUTLINE),
-           "TacticalBionic": (tactical, OUTLINE), "Archotech": (archotech, hexc("#1d160b"))}
+           "TacticalBionic": (tactical, OUTLINE), "Archotech": (archotech, hexc("#1d160b")),
+           "Artificial": (artificial, hexc("#1c120b")), "Mechanical": (mechanical, OUTLINE),
+           "Paresian": (paresian, hexc("#1d160b"))}
 
 
 def draw(name, eye, region):
