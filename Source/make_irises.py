@@ -287,29 +287,43 @@ def mechanical(u, v, r, a, su, sv, glints=True):
     return lit("#2e4057", "#5f7690", sv), None
 
 
-STARS = [(-0.42, 0.18, True), (0.38, 0.40, True), (0.47, 0.10, False), (0.15, 0.46, False), (-0.18, -0.46, False),
-         (-0.50, -0.12, False), (0.04, -0.50, False), (-0.33, 0.43, False)]
+SPARKLES = [(-0.36, 0.20, 1.0), (0.35, 0.30, 0.8)]
+STARS = [(0.44, 0.04), (0.10, 0.45), (-0.18, -0.42), (-0.46, -0.12), (0.04, -0.46), (-0.26, 0.42), (0.30, -0.26), (-0.44, 0.04)]
+
+
+def starlight(u, v, r, a):
+    level = 0.07 + 0.07 * (math.sin(a * 2 - r * 9) + 1) / 2
+    level += max(0.0, 1 - abs(r - 0.285) / 0.05) * 0.85
+    level += max(0.0, 1 - abs(r - 0.55) / 0.04) * 0.25
+    for x, y in STARS:
+        d = math.hypot(u - x, v - y)
+        level += 1.0 if d < 0.055 else max(0.0, 1 - (d - 0.055) / 0.05) * 0.6
+    for x, y, strength in SPARKLES:
+        dx, dy = abs(u - x), abs(v - y)
+        d = math.hypot(dx, dy)
+        level += strength * (1.0 if d < 0.075 else max(0.0, 1 - (d - 0.075) / 0.06) * 0.7)
+        level += strength * max(0.0, 1 - dx / 0.36) * max(0.0, 1 - dy / 0.05)
+        level += strength * max(0.0, 1 - dy / 0.36) * max(0.0, 1 - dx / 0.05)
+    return min(1.0, level)
 
 
 def paresian(u, v, r, a, su, sv, glints=True):
-    if glints and glint(su, sv, 0.30, -0.40, 0.12):
+    if glints and (glint(su, sv, 0.28, -0.40, 0.08)
+                   or (0.44 < math.hypot(su, sv) < 0.52 and -1.5 < math.atan2(sv, su) < -0.8)):
         return WHITE, GLINT
     if r > 0.70:
-        if r > 0.75 and any(abs(math.remainder(a - k, 2 * math.pi)) < 0.17 for k in (0.785, 2.356, 3.927, 5.498)):
+        return (lit("#9a7632", "#f2d276", sv) if math.cos(a * 22) > 0.15 else lit("#5c4318", "#b08a3e", sv)), None
+    if r > 0.67:
+        return hexc("#3a2a10"), None
+    if r > 0.57:
+        if r > 0.59 and min(abs(math.remainder(a - k * math.pi / 2, 2 * math.pi)) for k in range(4)) < 0.24:
             return lit("#0d6a3a", "#45d988", sv), None
-        return lit("#7e6026", "#e2bd60", sv), None
-    if r > 0.64:
-        return lit("#8d949c", "#e6ebf0", sv), None
-    if r < 0.27:
-        return hexc("#0b0a10"), None
-    level = 0.16 + 0.10 * speckle(u, v, 6, 3)
-    for x, y, big in STARS:
-        dx, dy = abs(u - x), abs(v - y)
-        if math.hypot(dx, dy) < (0.11 if big else 0.085):
-            return hexc("#0e1226"), 1.0
-        if big and ((dx < 0.055 and dy < 0.32) or (dy < 0.055 and dx < 0.32)):
-            level = max(level, 0.9)
-    return hexc("#0e1226"), level
+        if r > 0.60 and min(abs(math.remainder(a - k * math.pi / 6, 2 * math.pi)) for k in range(12)) < 0.075:
+            return hexc("#4b4f55"), None
+        return lit("#a7adb4", "#eef2f6", sv), None
+    if r < 0.25:
+        return hexc("#07060b"), None
+    return hexc("#0b0e1f"), starlight(u, v, r, a)
 
 
 DESIGNS = {"Bionic": (bionic, OUTLINE), "AdvancedBionic": (advanced, OUTLINE),
