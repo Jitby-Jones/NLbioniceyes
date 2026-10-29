@@ -312,7 +312,7 @@ def paresian(u, v, r, a, su, sv, glints=True):
                    or (0.44 < math.hypot(su, sv) < 0.52 and -1.5 < math.atan2(sv, su) < -0.8)):
         return WHITE, GLINT
     if r > 0.70:
-        return (lit("#9a7632", "#f2d276", sv) if math.cos(a * 22) > 0.15 else lit("#5c4318", "#b08a3e", sv)), None
+        return mix(lit("#8b6a2c", "#f0cf70", sv), hexc("#fff0bd"), 0.55 * max(0.0, math.cos(math.atan2(sv, su) + 0.85)) ** 6), None
     if r > 0.67:
         return hexc("#3a2a10"), None
     if r > 0.57:
