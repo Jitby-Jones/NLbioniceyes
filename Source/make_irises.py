@@ -18,6 +18,7 @@ GENDERS = ("Female", "Male")
 VIEWS = (("L", "south"), ("R", "south"), ("side", "east"))
 LINE_DARK = 0.12
 LINE_SPREAD = 15
+RIM_SPREAD = 10
 GLINT_GLOW = 0.5
 OWN_LINE = 0.86
 
@@ -75,6 +76,10 @@ def save_png(path, rows, channels=4):
                  + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
 
 
+def rolling(values, reach):
+    return [sum(values[(k + j) % len(values)] for j in range(-reach, reach + 1)) / (2 * reach + 1) for k in range(len(values))]
+
+
 class Eye:
     def __init__(self, texture, half):
         self.coverage, self.brightness = texture
@@ -84,7 +89,7 @@ class Eye:
                     max(x for x, _ in covered) + 2, max(y for _, y in covered) + 2)
         points = [(x + (sx + 0.5) / SS, y + (sy + 0.5) / SS) for y in range(self.box[1], self.box[3])
                   for x in range(self.box[0], self.box[2]) for sy in range(SS) for sx in range(SS)]
-        points = [p for p in points if self.inside(*p)]
+        points = [p for p in points if self.filled(*p)]
         n = len(points)
         self.cx = sum(x for x, _ in points) / n
         self.cy = sum(y for _, y in points) / n
@@ -103,11 +108,10 @@ class Eye:
         self.reach_x = math.hypot(self.half_w * c, self.half_h * s)
         self.reach_y = math.hypot(self.half_w * s, self.half_h * c)
         angles = [2 * math.pi * k / 360 for k in range(360)]
-        self.rim = [self.march(a) for a in angles]
-        widths = [self.line_width(a, r) for a, r in zip(angles, self.rim)]
-        line = [sum(widths[(k + j) % 360] for j in range(-LINE_SPREAD, LINE_SPREAD + 1)) / (2 * LINE_SPREAD + 1)
-                for k in range(360)]
-        self.inner = [r - w for r, w in zip(self.rim, line)]
+        rim = [self.march(a) for a in angles]
+        widths = [self.line_width(a, r) for a, r in zip(angles, rim)]
+        self.rim = rolling(rim, RIM_SPREAD)
+        self.inner = [r - w for r, w in zip(self.rim, rolling(widths, LINE_SPREAD))]
         self.fit = 1.0
         edge = sorted(math.hypot(*self.design_point(self.cx + math.cos(a) * d, self.cy + math.sin(a) * d))
                       for a, d in zip(angles, self.inner))
@@ -125,8 +129,18 @@ class Eye:
             return rows[b][a] if 0 <= a < len(rows) and 0 <= b < len(rows) and self.side(a) else 0
         return (at(i, j) * (1 - fx) + at(i + 1, j) * fx) * (1 - fy) + (at(i, j + 1) * (1 - fx) + at(i + 1, j + 1) * fx) * fy
 
-    def inside(self, x, y):
+    def filled(self, x, y):
         return self.sample(self.coverage, x, y) >= 0.5
+
+    def polar(self, values, x, y):
+        dx, dy = x - self.cx, y - self.cy
+        k = (math.atan2(dy, dx) % (2 * math.pi)) / (2 * math.pi) * 360
+        i, f = int(k) % 360, k - int(k)
+        return math.hypot(dx, dy), values[i] * (1 - f) + values[(i + 1) % 360] * f
+
+    def inside(self, x, y):
+        d, edge = self.polar(self.rim, x, y)
+        return d < edge
 
     def ray(self, rows, angle, d):
         return self.sample(rows, self.cx + math.cos(angle) * d, self.cy + math.sin(angle) * d)
@@ -144,10 +158,8 @@ class Eye:
         return min(max(rim - d, 0.5), rim / 3)
 
     def on_line(self, x, y):
-        dx, dy = x - self.cx, y - self.cy
-        k = (math.atan2(dy, dx) % (2 * math.pi)) / (2 * math.pi) * 360
-        i, f = int(k) % 360, k - int(k)
-        return math.hypot(dx, dy) >= self.inner[i] * (1 - f) + self.inner[(i + 1) % 360] * f
+        d, edge = self.polar(self.inner, x, y)
+        return d >= edge
 
     def design_point(self, x, y):
         dx, dy = (x - self.cx) * self.fit, (y - self.cy) * self.fit
