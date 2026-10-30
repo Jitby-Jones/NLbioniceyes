@@ -364,7 +364,11 @@ def royal(u, v, r, a, su, sv, glints=True):
         return lit("#a7782a", "#efc35a", sv), None
     if r > 0.56:
         return hexc("#3f1015"), None
-    return LAMP_OFF, 0.62 + 0.38 * (1 - smooth(r, 0.0, 0.56))
+    if r < 0.18:
+        return lit("#b8872e", "#f6d36a", sv), None
+    if r < 0.23:
+        return hexc("#3f1015"), None
+    return LAMP_OFF, 0.62 + 0.38 * (1 - smooth(r, 0.23, 0.56))
 
 
 def blind(u, v, r, a, su, sv, glints=True):
