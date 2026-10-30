@@ -42,10 +42,13 @@ namespace BionicIrises
     {
         public bool glow = true;
 
+        public bool bandages;
+
         public override void ExposeData()
         {
             base.ExposeData();
             Scribe_Values.Look(ref glow, "glow", true);
+            Scribe_Values.Look(ref bandages, "bandages", false);
         }
     }
 
@@ -68,6 +71,7 @@ namespace BionicIrises
             var list = new Listing_Standard();
             list.Begin(inRect);
             list.CheckboxLabeled("BionicIrises_Glow".Translate().Resolve(), ref Settings.glow, "BionicIrises_GlowTip".Translate().Resolve());
+            list.CheckboxLabeled("BionicIrises_Bandages".Translate().Resolve(), ref Settings.bandages, "BionicIrises_BandagesTip".Translate().Resolve());
             list.End();
         }
 
@@ -468,7 +472,8 @@ namespace BionicIrises
         static void ChooseWoundOverlayPostfix(Hediff __0, ref FleshTypeDef.ResolvedWound __result)
         {
             Irises irises;
-            if (__result != null && !Disabled && __0 is Hediff_MissingPart && __0.pawn != null
+            if (__result != null && !Disabled && (BionicIrisesMod.Settings == null || !BionicIrisesMod.Settings.bandages)
+                && __0 is Hediff_MissingPart && __0.pawn != null
                 && FittedPawns.TryGetValue(__0.pawn, out irises) && irises.sockets.Contains(__0.Part))
                 __result = null;
         }

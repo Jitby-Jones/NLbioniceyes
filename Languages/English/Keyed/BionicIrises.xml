@@ -2,4 +2,6 @@
 <LanguageData>
   <BionicIrises_Glow>Glowing bionic irises</BionicIrises_Glow>
   <BionicIrises_GlowTip>The eye-coloured parts of bionic irises stay lit in the dark. Turn off to have them darken at night like the rest of the face.</BionicIrises_GlowTip>
+  <BionicIrises_Bandages>Bandages over destroyed eyes</BionicIrises_Bandages>
+  <BionicIrises_BandagesTip>Let RimWorld cover a destroyed eye with its wound and, once tended, a bandage. Leave off to see the empty eye socket instead.</BionicIrises_BandagesTip>
 </LanguageData>
