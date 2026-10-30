@@ -121,6 +121,7 @@
     <defName>BionicIris_Blind</defName>
     <label>blind eye iris</label>
     <blindEye>true</blindEye>
+    <blindHealth>0.5</blindHealth>
     <texPath>Things/Pawn/BionicIrises/Blind</texPath>
   </BionicIrises.BionicIrisDef>
 

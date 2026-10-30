@@ -31,6 +31,8 @@ namespace BionicIrises
 
         public bool blindEye;
 
+        public float blindHealth;
+
         public float eyeColorTint;
 
         public bool naturalEye;
@@ -154,6 +156,7 @@ namespace BionicIrises
 
             public readonly List<BodyPartRecord> parts = new List<BodyPartRecord>();
             public readonly List<BodyPartRecord> sockets = new List<BodyPartRecord>();
+            public readonly List<BodyPartRecord> blinds = new List<BodyPartRecord>();
 
             public Clip[] clips;
         }
@@ -225,6 +228,7 @@ namespace BionicIrises
             Patch(harmony, AccessTools.Method(typeof(AnimationFrameMapper), "ApplyFrame"), "ApplyFramePostfix");
             Patch(harmony, AccessTools.Method(typeof(PawnRenderNodeWorker), "CanDrawNow"), "CanDrawNowPostfix");
             Patch(harmony, AccessTools.Method(typeof(FleshTypeDef), "ChooseWoundOverlay"), "ChooseWoundOverlayPostfix");
+            Patch(harmony, AccessTools.Method(typeof(Hediff_Injury), "Heal"), "HealPostfix");
             foreach (string name in new[] { "AddHediff", "RemoveHediff", "RestorePart" })
             {
                 bool restore = name == "RestorePart";
@@ -640,6 +644,8 @@ namespace BionicIrises
                 irises.parts.Add(leftPart);
                 if (leftIris.missingEye)
                     irises.sockets.Add(leftPart);
+                if (leftIris.blindEye)
+                    irises.blinds.Add(leftPart);
             }
             if (rightIris != null && Replace(graphics, NLFacialAnimationLayerType.R_Basic, NLFacialAnimationLayerType.R_Option, rightIris, eyeShader, gender, "R", rightColor,
                 Tint(rightIris, skin, rightEyeColor)))
@@ -651,6 +657,8 @@ namespace BionicIrises
                 irises.parts.Add(rightPart);
                 if (rightIris.missingEye)
                     irises.sockets.Add(rightPart);
+                if (rightIris.blindEye)
+                    irises.blinds.Add(rightPart);
             }
             if (!irises.left && !irises.right)
                 return;
@@ -694,6 +702,29 @@ namespace BionicIrises
         {
             return (MissingIris != null || BlindIris != null) && part != null && part.def != null && part.def.tags != null
                 && part.def.tags.Contains(BodyPartTagDefOf.SightSource);
+        }
+
+        static void HealPostfix(Hediff_Injury __instance)
+        {
+            if (Disabled || BlindIris == null || BlindIris.blindHealth <= 0f || __instance.pawn == null || !OnEye(__instance.Part))
+                return;
+            try
+            {
+                Pawn pawn = __instance.pawn;
+                EyeballControllerComp comp = pawn.GetComp<EyeballControllerComp>();
+                EyeballTypeDef faceType = comp == null ? null : FaceTypeField.GetValue(comp) as EyeballTypeDef;
+                if (pawn.def != ThingDefOf.Human || faceType == null || faceType.altMaskPath.NullOrEmpty())
+                    return;
+                Irises irises;
+                bool shown = FittedPawns.TryGetValue(pawn, out irises) && irises.blinds.Contains(__instance.Part);
+                if (shown != (IrisOn(pawn, __instance.Part) == BlindIris))
+                    Reload(pawn, comp);
+            }
+            catch (Exception e)
+            {
+                Disabled = true;
+                Log.Error("[Bionic Irises] Turned off after an error (Facial Animation may have changed): " + e);
+            }
         }
 
         static void RestorePartPostfix(Pawn_HealthTracker __instance)
@@ -1161,7 +1192,8 @@ namespace BionicIrises
                 return best;
             if (pawn.health.hediffSet.PartIsMissing(eye))
                 return MissingIris;
-            if (BlindIris != null && PawnCapacityUtility.CalculatePartEfficiency(pawn.health.hediffSet, eye, false, null) <= 0f)
+            if (BlindIris != null && (PawnCapacityUtility.CalculatePartEfficiency(pawn.health.hediffSet, eye, false, null) <= 0f
+                || pawn.health.hediffSet.GetPartHealth(eye) <= BlindIris.blindHealth * eye.def.GetMaxHealth(pawn)))
                 return BlindIris;
             return null;
         }
