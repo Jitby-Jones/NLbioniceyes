@@ -360,7 +360,7 @@ def royal(u, v, r, a, su, sv, glints=True):
     if r > 0.70:
         sheen = max(0.0, math.cos(math.atan2(sv, su) + 2.4)) ** 4
         return LAMP_OFF, min(1.0, 0.62 + 0.2 * (sv + 1) / 2 + 0.3 * sheen)
-    if r > 0.635:
+    if r > 0.55:
         return lit("#a7782a", "#efc35a", sv), None
     if abs(u) ** 0.7 + abs(v) ** 0.7 < 0.30 ** 0.7:
         return lit("#c99a38", "#f8dc7a", sv), None
