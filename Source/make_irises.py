@@ -360,11 +360,11 @@ def royal(u, v, r, a, su, sv, glints=True):
     if r > 0.70:
         sheen = max(0.0, math.cos(math.atan2(sv, su) + 2.4)) ** 4
         return mix(lit("#6b2026", "#a8434a", sv), hexc("#e3858a"), 0.6 * sheen), None
-    if r > 0.665:
+    if r > 0.635:
         return lit("#a7782a", "#efc35a", sv), None
     if r > 0.56:
         return hexc("#3f1015"), None
-    return mix(hexc("#d97a14"), hexc("#ffe04a"), 1 - smooth(r, 0.05, 0.5)), 0.62 + 0.38 * (1 - smooth(r, 0.0, 0.56))
+    return LAMP_OFF, 0.62 + 0.38 * (1 - smooth(r, 0.0, 0.56))
 
 
 def blind(u, v, r, a, su, sv, glints=True):

@@ -100,7 +100,6 @@
       <li>royal bionic</li>
       <li>royalbionic</li>
     </matchNames>
-    <glowColor>(255,190,60)</glowColor>
     <texPath>Things/Pawn/BionicIrises/RoyalBionic</texPath>
   </BionicIrises.BionicIrisDef>
 

@@ -34,8 +34,6 @@ namespace BionicIrises
         public float eyeColorTint;
 
         public bool naturalEye;
-
-        public Color glowColor;
     }
 
     public class BionicIrisSettings : ModSettings
@@ -736,7 +734,7 @@ namespace BionicIrises
                 return false;
             graphics[basic] = Collection(new NLGraphicParam(eyeShader, tex, WhiteMask, tint, Color.white));
             string lights = BionicIrisesMod.Settings == null || BionicIrisesMod.Settings.glow ? iris.glowShader : iris.litShader;
-            graphics[highlight] = Collection(new NLGraphicParam(lights, tex + "_glow", null, Glow(iris.glowColor.a > 0f ? iris.glowColor : accent), Color.white));
+            graphics[highlight] = Collection(new NLGraphicParam(lights, tex + "_glow", null, Glow(accent), Color.white));
             return true;
         }
 
