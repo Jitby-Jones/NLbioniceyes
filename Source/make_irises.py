@@ -359,17 +359,12 @@ def royal(u, v, r, a, su, sv, glints=True):
         return WHITE, GLINT
     if r > 0.70:
         sheen = max(0.0, math.cos(math.atan2(sv, su) + 2.4)) ** 4
-        return mix(lit("#6b2026", "#a8434a", sv), hexc("#e3858a"), 0.6 * sheen), None
+        return LAMP_OFF, min(1.0, 0.62 + 0.2 * (sv + 1) / 2 + 0.3 * sheen)
     if r > 0.635:
         return lit("#a7782a", "#efc35a", sv), None
-    if r > 0.56:
-        return hexc("#3f1015"), None
-    star = abs(u) ** 0.7 + abs(v) ** 0.7
-    if star < 0.30 ** 0.7:
+    if abs(u) ** 0.7 + abs(v) ** 0.7 < 0.30 ** 0.7:
         return lit("#c99a38", "#f8dc7a", sv), None
-    if star < 0.37 ** 0.7:
-        return hexc("#3f1015"), None
-    return LAMP_OFF, 0.62 + 0.38 * (1 - smooth(r, 0.0, 0.56))
+    return lit("#060608", "#17171c", sv), None
 
 
 def blind(u, v, r, a, su, sv, glints=True):
@@ -393,7 +388,7 @@ DESIGNS = {"Bionic": (bionic, OUTLINE), "AdvancedBionic": (advanced, OUTLINE),
            "TacticalBionic": (tactical, OUTLINE), "Archotech": (archotech, hexc("#1d160b")),
            "Artificial": (artificial, hexc("#1c120b")), "Mechanical": (mechanical, OUTLINE),
            "Paresian": (paresian, hexc("#1d160b")), "Blind": (blind, hexc("#252b31")),
-           "LightReceptor": (receptor, OUTLINE), "RoyalBionic": (royal, hexc("#2a0a0e"))}
+           "LightReceptor": (receptor, OUTLINE), "RoyalBionic": (royal, OUTLINE)}
 
 
 def draw(name, eye, region):
