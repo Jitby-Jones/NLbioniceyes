@@ -300,9 +300,7 @@ def mechanical(u, v, r, a, su, sv, glints=True):
         return hexc("#0d0c0b"), None
     if r < 0.32:
         return hexc("#1a1816"), None
-    if speckle(u, v, 10, 2) < 0.22:
-        return lit("#22324a", "#3f5670", sv), None
-    return lit("#2e4057", "#5f7690", sv), None
+    return hexc("#1d1b19"), 0.48 + 0.34 * (sv + 1) / 2 - (0.14 if speckle(u, v, 10, 2) < 0.22 else 0.0)
 
 
 SPARKLES = [(-0.36, 0.20, 1.0), (0.35, 0.30, 0.8)]

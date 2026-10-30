@@ -60,6 +60,7 @@
     <matchNames>
       <li>mechanical</li>
     </matchNames>
+    <glowShader>Map/Transparent</glowShader>
     <texPath>Things/Pawn/BionicIrises/Mechanical</texPath>
   </BionicIrises.BionicIrisDef>
 
