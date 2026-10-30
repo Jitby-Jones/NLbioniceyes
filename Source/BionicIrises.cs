@@ -153,6 +153,7 @@ namespace BionicIrises
             public Gender gender;
 
             public readonly List<BodyPartRecord> parts = new List<BodyPartRecord>();
+            public readonly List<BodyPartRecord> sockets = new List<BodyPartRecord>();
 
             public Clip[] clips;
         }
@@ -223,6 +224,7 @@ namespace BionicIrises
             Patch(harmony, AccessTools.Method(typeof(EyeballControllerComp), "LoadTextures"), "LoadTexturesPostfix");
             Patch(harmony, AccessTools.Method(typeof(AnimationFrameMapper), "ApplyFrame"), "ApplyFramePostfix");
             Patch(harmony, AccessTools.Method(typeof(PawnRenderNodeWorker), "CanDrawNow"), "CanDrawNowPostfix");
+            Patch(harmony, AccessTools.Method(typeof(FleshTypeDef), "ChooseWoundOverlay"), "ChooseWoundOverlayPostfix");
             foreach (string name in new[] { "AddHediff", "RemoveHediff", "RestorePart" })
             {
                 bool restore = name == "RestorePart";
@@ -459,6 +461,14 @@ namespace BionicIrises
                 __result = false;
         }
 
+        static void ChooseWoundOverlayPostfix(Hediff __0, ref FleshTypeDef.ResolvedWound __result)
+        {
+            Irises irises;
+            if (__result != null && !Disabled && __0 is Hediff_MissingPart && __0.pawn != null
+                && FittedPawns.TryGetValue(__0.pawn, out irises) && irises.sockets.Contains(__0.Part))
+                __result = null;
+        }
+
         static void ApplyFramePostfix(FaceAnimationDef.AnimationFrame __0, EyeballControllerComp ___eyeballController)
         {
             Irises irises;
@@ -628,6 +638,8 @@ namespace BionicIrises
                 irises.leftUv = layout.Front(true, leftIris.missingEye);
                 irises.leftSideUv = layout.Side(leftIris.missingEye);
                 irises.parts.Add(leftPart);
+                if (leftIris.missingEye)
+                    irises.sockets.Add(leftPart);
             }
             if (rightIris != null && Replace(graphics, NLFacialAnimationLayerType.R_Basic, NLFacialAnimationLayerType.R_Option, rightIris, eyeShader, gender, "R", rightColor,
                 Tint(rightIris, skin, rightEyeColor)))
@@ -637,6 +649,8 @@ namespace BionicIrises
                 irises.rightUv = layout.Front(false, rightIris.missingEye);
                 irises.rightSideUv = layout.Side(rightIris.missingEye);
                 irises.parts.Add(rightPart);
+                if (rightIris.missingEye)
+                    irises.sockets.Add(rightPart);
             }
             if (!irises.left && !irises.right)
                 return;
@@ -644,6 +658,8 @@ namespace BionicIrises
             PreparePieces(pawn, irises);
             Fitted.Add(comp, irises);
             FittedPawns.Add(pawn, irises);
+            if (irises.sockets.Count > 0 && pawn.Drawer != null && pawn.Drawer.renderer != null && pawn.Drawer.renderer.WoundOverlays != null)
+                pawn.Drawer.renderer.WoundOverlays.ClearCache();
         }
 
         static Clip[] ClipsFor(Irises previous)
