@@ -219,6 +219,7 @@ namespace BionicIrises
                     BlindIris = def;
             }
             MatchByName();
+            MatchByItem();
             if (PawnField == null || FaceTypeField == null || GraphicListField == null || SecondColorField == null || CvtMainColor == null)
             {
                 Log.Error("[Bionic Irises] This Facial Animation version is not supported; iris sprites are off.");
@@ -301,6 +302,41 @@ namespace BionicIrises
             }
             if (matched.Count > 0)
                 Log.Message("[Bionic Irises] Matched by name: " + string.Join(", ", matched.ToArray()));
+        }
+
+        static void MatchByItem()
+        {
+            var items = new Dictionary<ThingDef, List<BionicIrisDef>>();
+            foreach (BionicIrisDef def in DefDatabase<BionicIrisDef>.AllDefsListForReading)
+            {
+                foreach (HediffDef hediff in def.hediffs)
+                {
+                    if (hediff == null || hediff.spawnThingOnRemoved == null || !hediff.spawnThingOnRemoved.isTechHediff)
+                        continue;
+                    List<BionicIrisDef> irises;
+                    if (!items.TryGetValue(hediff.spawnThingOnRemoved, out irises))
+                    {
+                        irises = new List<BionicIrisDef>();
+                        items[hediff.spawnThingOnRemoved] = irises;
+                    }
+                    if (!irises.Contains(def))
+                        irises.Add(def);
+                }
+            }
+            var matched = new List<string>();
+            foreach (HediffDef hediff in DefDatabase<HediffDef>.AllDefsListForReading)
+            {
+                List<BionicIrisDef> irises;
+                if (MappedHediffs.Contains(hediff) || hediff.spawnThingOnRemoved == null || hediff.hediffClass == null
+                    || !typeof(Hediff_AddedPart).IsAssignableFrom(hediff.hediffClass) || !items.TryGetValue(hediff.spawnThingOnRemoved, out irises))
+                    continue;
+                foreach (BionicIrisDef iris in irises)
+                    iris.hediffs.Add(hediff);
+                MappedHediffs.Add(hediff);
+                matched.Add(hediff.defName + " (" + irises[0].defName + ")");
+            }
+            if (matched.Count > 0)
+                Log.Message("[Bionic Irises] Matched by item: " + string.Join(", ", matched.ToArray()));
         }
 
         static string Plain(string text)
