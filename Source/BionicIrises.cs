@@ -175,11 +175,18 @@ namespace BionicIrises
             Mesh builtHead;
             Rect builtUv;
             Cover builtCover;
-            int builtX, builtY;
+            int builtX, builtY, seenX, seenY;
 
-            public bool IsBuilt(Mesh head, Rect uv, Cover cover, int x, int y)
+            public bool Keeps(Mesh head, Rect uv, Cover cover, int x, int y, bool exact)
             {
-                return builtHead == head && builtUv == uv && builtCover == cover && builtX == x && builtY == y;
+                bool still = x == seenX && y == seenY;
+                seenX = x;
+                seenY = y;
+                if (builtHead != head || builtUv != uv || builtCover != cover)
+                    return false;
+                if (builtX == x && builtY == y)
+                    return true;
+                return !exact && !still && Math.Abs(x - builtX) < Steps && Math.Abs(y - builtY) < Steps;
             }
 
             public void Built(Mesh head, Rect uv, Cover cover, int x, int y)
@@ -246,6 +253,7 @@ namespace BionicIrises
             if (DrawsPieces && LidTypeField != null && LidShapeField != null
                 && Patch(harmony, AccessTools.Method(typeof(PawnRenderTree), "Draw", new[] { typeof(PawnDrawParms) }), "DrawPrefix", true))
             {
+                Patch(harmony, AccessTools.Method(typeof(PawnRenderNode), "AppendRequests"), "AppendRequestsPrefix", true);
                 try
                 {
                     ReadCovers();
@@ -462,6 +470,8 @@ namespace BionicIrises
             PawnGraphicDrawRequest request = requests[last];
             if (request.node != node)
                 return;
+            Clip clip = ClipsToLids && irises.clips != null && (lights || (left ? irises.leftSocket : irises.rightSocket))
+                ? irises.clips[(left ? 0 : 4) + (lights ? 2 : 0) + (parms.DrawNow ? 1 : 0)] : null;
             Rot4 facing = part.overrideHeadRot;
             Rect uv;
             if (facing == Rot4.South)
@@ -484,7 +494,6 @@ namespace BionicIrises
                 }
                 return;
             }
-            Clip clip = ClipsToLids && irises.clips != null ? irises.clips[(left ? 0 : 4) + (lights ? 2 : 0) + (parms.DrawNow ? 1 : 0)] : null;
             if (clip != null)
             {
                 clip.head = request.mesh;
@@ -495,6 +504,16 @@ namespace BionicIrises
             var replaced = new PawnGraphicDrawRequest(node, piece, request.material);
             replaced.preDrawnComputedMatrix = request.preDrawnComputedMatrix;
             requests[last] = replaced;
+        }
+
+        static void AppendRequestsPrefix(PawnRenderNode __instance, PawnDrawParms __0, List<PawnGraphicDrawRequest> __1)
+        {
+            Irises irises;
+            if (__1 == null || __1.Count != 0 || __instance.tree == null || __instance.tree.rootNode != __instance || __instance.tree.pawn == null
+                || !FittedPawns.TryGetValue(__instance.tree.pawn, out irises) || irises.clips == null)
+                return;
+            for (int i = __0.DrawNow ? 1 : 0; i < irises.clips.Length; i += 2)
+                irises.clips[i].head = null;
         }
 
         static void CanDrawNowPostfix(PawnRenderNode node, PawnDrawParms parms, ref bool __result)
@@ -536,6 +555,7 @@ namespace BionicIrises
                 LidShapeDef shape = irises.lids == null ? null : LidShapeField.GetValue(irises.lids) as LidShapeDef;
                 if (shape != null && shape.disableEyeball)
                     return;
+                Cover[] covers = CoversFor(irises, shape);
                 Vector3 lids = irises.lids == null ? Vector3.zero
                     : ((IFacialAnimationController)irises.lids).GetOffset(NLFacialAnimationLayerType.Cover, parms.Portrait, parms.facing);
                 for (int i = parms.DrawNow ? 1 : 0; i < irises.clips.Length; i += 2)
@@ -547,7 +567,8 @@ namespace BionicIrises
                     NLFacialAnimationLayerType layer = left ? (lights ? NLFacialAnimationLayerType.L_Option : NLFacialAnimationLayerType.L_Basic)
                         : (lights ? NLFacialAnimationLayerType.R_Option : NLFacialAnimationLayerType.R_Basic);
                     Vector3 eye = ((IFacialAnimationController)irises.eyes).GetOffset(layer, parms.Portrait, parms.facing);
-                    Cut(clip, CoverFor(irises, shape, clip.side), eye - lids, lights, left ? irises.leftSocket : irises.rightSocket);
+                    Cover cover = covers == null ? null : covers[(irises.gender == Gender.Female ? 2 : 0) + (clip.side ? 1 : 0)];
+                    Cut(clip, cover, eye - lids, lights, left ? irises.leftSocket : irises.rightSocket, parms.DrawNow);
                 }
             }
             catch (Exception e)
@@ -557,17 +578,17 @@ namespace BionicIrises
             }
         }
 
-        static Cover CoverFor(Irises irises, LidShapeDef shape, bool side)
+        static Cover[] CoversFor(Irises irises, LidShapeDef shape)
         {
             LidTypeDef type = irises.lids == null ? null : LidTypeField.GetValue(irises.lids) as LidTypeDef;
             Dictionary<LidShapeDef, Cover[]> shapes;
             Cover[] covers;
             if (type == null || shape == null || !Covers.TryGetValue(type, out shapes) || !shapes.TryGetValue(shape, out covers))
                 return null;
-            return covers[(irises.gender == Gender.Female ? 2 : 0) + (side ? 1 : 0)];
+            return covers;
         }
 
-        static void Cut(Clip clip, Cover cover, Vector3 delta, bool lights, bool anchored)
+        static void Cut(Clip clip, Cover cover, Vector3 delta, bool lights, bool anchored, bool exact)
         {
             HeadQuad head = QuadOf(clip.head);
             if (head == null)
@@ -579,7 +600,7 @@ namespace BionicIrises
             bool moves = !flat && (cover != null || anchored);
             int x = moves ? Mathf.RoundToInt(delta.x / across.x * 512f * Steps) : 0;
             int y = moves ? -Mathf.RoundToInt(delta.z / up.z * 512f * Steps) : 0;
-            if (clip.IsBuilt(clip.head, clip.uv, cover, x, y))
+            if (clip.Keeps(clip.head, clip.uv, cover, x, y, exact))
                 return;
             Fill(clip.mesh, head, clip.uv, cover == null ? null : lights ? cover.lights : cover.iris, cover, x, y, anchored);
             clip.Built(clip.head, clip.uv, cover, x, y);
@@ -999,9 +1020,8 @@ namespace BionicIrises
             mesh.Clear();
             mesh.SetVertices(vertices);
             mesh.SetUVs(0, uvs);
-            mesh.SetTriangles(triangles, 0);
+            mesh.SetTriangles(triangles, 0, true);
             mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
         }
 
         static int[][] OpenRuns(byte[] alpha, int width, int height, float threshold)
@@ -1010,9 +1030,12 @@ namespace BionicIrises
             int limit = (int)Math.Ceiling(threshold * 255f * 64f);
             var rows = new int[height * Steps][];
             var line = new List<int>();
+            var column = new int[width + 2];
             for (int j = 0; j < rows.Length; j++)
             {
                 int ty = j / Steps - back[j % Steps], fy = eighths[j % Steps];
+                for (int tx = -1; tx <= width; tx++)
+                    column[tx + 1] = (8 - fy) * Texel(alpha, width, height, tx, ty) + fy * Texel(alpha, width, height, tx, ty + 1);
                 line.Clear();
                 int start = -1;
                 for (int i = 0; i <= width * Steps; i++)
@@ -1021,9 +1044,7 @@ namespace BionicIrises
                     if (i < width * Steps)
                     {
                         int tx = i / Steps - back[i % Steps], fx = eighths[i % Steps];
-                        int upper = (8 - fx) * Texel(alpha, width, height, tx, ty) + fx * Texel(alpha, width, height, tx + 1, ty);
-                        int lower = (8 - fx) * Texel(alpha, width, height, tx, ty + 1) + fx * Texel(alpha, width, height, tx + 1, ty + 1);
-                        open = (8 - fy) * upper + fy * lower < limit;
+                        open = (8 - fx) * column[tx + 1] + fx * column[tx + 2] < limit;
                     }
                     if (open && start < 0)
                         start = i;
@@ -1138,14 +1159,17 @@ namespace BionicIrises
             if (read.TryGetValue(texture, out cover))
                 return cover;
             int width = texture.width, height = texture.height;
+            int x0 = Mathf.Clamp(Mathf.FloorToInt(window[0] * width / 512f), 0, width - 1), x1 = Mathf.Clamp(Mathf.CeilToInt(window[2] * width / 512f), x0 + 1, width);
+            int y0 = Mathf.Clamp(height - Mathf.CeilToInt(window[3] * height / 512f), 0, height - 1), y1 = Mathf.Clamp(height - Mathf.FloorToInt(window[1] * height / 512f), y0 + 1, height);
+            int readWidth = x1 - x0, readHeight = y1 - y0;
             RenderTexture target = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
             RenderTexture active = RenderTexture.active;
-            var copy = new Texture2D(width, height, TextureFormat.ARGB32, false, true);
+            var copy = new Texture2D(readWidth, readHeight, TextureFormat.ARGB32, false, true);
             try
             {
                 Graphics.Blit(texture, target);
                 RenderTexture.active = target;
-                copy.ReadPixels(new Rect(0f, 0f, width, height), 0, 0);
+                copy.ReadPixels(new Rect(x0, y0, readWidth, readHeight), 0, 0);
                 Color32[] pixels = copy.GetPixels32();
                 int windowWidth = window[2] - window[0], windowHeight = window[3] - window[1];
                 var alpha = new byte[windowWidth * windowHeight];
@@ -1155,7 +1179,7 @@ namespace BionicIrises
                     for (int i = 0; i < windowWidth; i++)
                     {
                         int tx = (int)((window[0] + i + 0.5f) * width / 512f);
-                        alpha[j * windowWidth + i] = tx < 0 || ty < 0 || tx >= width || ty >= height ? (byte)255 : pixels[ty * width + tx].a;
+                        alpha[j * windowWidth + i] = tx < x0 || ty < y0 || tx >= x1 || ty >= y1 ? (byte)255 : pixels[(ty - y0) * readWidth + tx - x0].a;
                     }
                 }
                 cover = new Cover
