@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Patch>
+  <Operation Class="PatchOperationReplace">
+    <xpath>Defs/BionicIrises.BionicIrisLayoutDef[defName="BionicIrisLayout_Female"]</xpath>
+    <value>
+      <BionicIrises.BionicIrisLayoutDef>
+        <defName>BionicIrisLayout_Female</defName>
+        <gender>Female</gender>
+        <left>(207,267)</left>
+        <right>(271,267)</right>
+        <frontSize>(32,32)</frontSize>
+        <side>(302,266)</side>
+        <sideSize>(16,32)</sideSize>
+        <leftSocket>(195,262)</leftSocket>
+        <rightSocket>(267,262)</rightSocket>
+        <socketSize>(48,44)</socketSize>
+        <sideSocket>(291,264)</sideSocket>
+        <sideSocketSize>(28,40)</sideSocketSize>
+      </BionicIrises.BionicIrisLayoutDef>
+    </value>
+  </Operation>
+  <Operation Class="PatchOperationReplace">
+    <xpath>Defs/BionicIrises.BionicIrisLayoutDef[defName="BionicIrisLayout_Male"]</xpath>
+    <value>
+      <BionicIrises.BionicIrisLayoutDef>
+        <defName>BionicIrisLayout_Male</defName>
+        <gender>Male</gender>
+        <left>(207,267)</left>
+        <right>(271,267)</right>
+        <frontSize>(32,32)</frontSize>
+        <side>(302,266)</side>
+        <sideSize>(16,32)</sideSize>
+        <leftSocket>(195,262)</leftSocket>
+        <rightSocket>(267,262)</rightSocket>
+        <socketSize>(48,44)</socketSize>
+        <sideSocket>(292,264)</sideSocket>
+        <sideSocketSize>(28,40)</sideSocketSize>
+      </BionicIrises.BionicIrisLayoutDef>
+    </value>
+  </Operation>
+</Patch>
