@@ -9,8 +9,11 @@ ROOT = os.path.join(HERE, "..")
 IRISES = ("Textures", "Things", "Pawn", "BionicIrises")
 EXPERIMENTALS = r"C:\Program Files (x86)\Steam\steamapps\workshop\content\294100\2581693737"
 UNAGI = r"C:\Program Files (x86)\Steam\steamapps\workshop\content\294100\3268178647"
-FACES = {"FA": (ROOT, EXPERIMENTALS, os.path.join(ROOT, "1.6", "Defs", "BionicIrisLayouts.xml"), "#efe9e6", 1),
-         "UNAGI": (os.path.join(ROOT, "Mods", "UNAGI"), UNAGI, os.path.join(ROOT, "Mods", "UNAGI", "Patches", "BionicIrisLayouts.xml"), "#ffffff", 4)}
+FACES = {"FA": {"home": ROOT, "source": EXPERIMENTALS, "layout": os.path.join(ROOT, "1.6", "Defs", "BionicIrisLayouts.xml"),
+                "edge": "#efe9e6", "scale": 1, "shine": True},
+         "UNAGI": {"home": os.path.join(ROOT, "Mods", "UNAGI"), "source": UNAGI,
+                   "layout": os.path.join(ROOT, "Mods", "UNAGI", "Patches", "BionicIrisLayouts.xml"),
+                   "edge": "#ffffff", "scale": 4, "shine": False}}
 NORMAL_EYE = ("Textures", "Things", "Pawn", "FA-Experimentals", "Eyes", "Normal")
 LIDS = ("Textures", "Things", "Pawn", "FA-Experimentals", "Lids")
 SCLERA = 0.1
@@ -407,7 +410,8 @@ def blind(u, v, r, a, su, sv, glints=True):
     haze = (math.sin(u * 6.3 + 1.1 + math.sin(v * 4.1) * 1.4) + math.sin(v * 5.2 - u * 2.7 + 0.6) + 2) / 4
     film = 0.12 + 0.30 * (1 - smooth(math.hypot(u + 0.04, v + 0.02), 0.05, 0.55))
     col = mix(col, hexc("#e4eaef"), film * (0.55 + 0.45 * haze))
-    col = mix(col, hexc("#ffffff"), 0.45 * (1 - smooth(math.hypot(su - 0.30, sv + 0.36), 0.03, 0.22)))
+    if glints:
+        col = mix(col, hexc("#ffffff"), 0.45 * (1 - smooth(math.hypot(su - 0.30, sv + 0.36), 0.03, 0.22)))
     return col, None
 
 
@@ -418,7 +422,7 @@ DESIGNS = {"Bionic": (bionic, OUTLINE), "AdvancedBionic": (advanced, OUTLINE),
            "LightReceptor": (receptor, OUTLINE), "RoyalBionic": (royal, OUTLINE)}
 
 
-def draw(name, eye, region, scale):
+def draw(name, eye, region, scale, shine):
     design, outline = DESIGNS[name]
     x0, y0, x1, y1 = region
     w, h = (x1 - x0) * scale, (y1 - y0) * scale
@@ -439,7 +443,7 @@ def draw(name, eye, region, scale):
                     else:
                         u, v = eye.design_point(px, py)
                         spot = (u, v, math.hypot(u, v), math.atan2(v, u)) + eye.screen_point(px, py)
-                        rgb, glow = design(*spot)
+                        rgb, glow = design(*spot, glints=shine)
                         if glow == GLINT:
                             under = design(*spot, glints=False)[1]
                             if under is not None:
@@ -578,9 +582,10 @@ def pair(left, right):
 
 def build(face, root):
     global SOFT
-    home, _, layout, edge, scale = FACES[face]
+    settings = FACES[face]
+    scale, layout = settings["scale"], settings["layout"]
     SOFT = scale > 1
-    out = os.path.join(home, *IRISES)
+    out = os.path.join(settings["home"], *IRISES)
     eyes, regions, sockets, whites, skins, shapes = {}, {}, {}, {}, {}, {}
     for gender in GENDERS:
         folder = os.path.join(root, *NORMAL_EYE, gender)
@@ -610,7 +615,7 @@ def build(face, root):
             d = os.path.join(out, name, gender)
             os.makedirs(d, exist_ok=True)
             for view, rot in VIEWS:
-                base, glow = draw(name, eyes[gender][view], regions[(gender, view)], scale)
+                base, glow = draw(name, eyes[gender][view], regions[(gender, view)], scale, settings["shine"])
                 for side in (("L", "R") if view == "side" else (view,)):
                     save_png(os.path.join(d, f"normal_{side}_{rot}.png"), base)
                     save_png(os.path.join(d, f"normal_{side}_glow_{rot}.png"), glow)
@@ -620,7 +625,7 @@ def build(face, root):
         os.makedirs(d, exist_ok=True)
         for view, rot in VIEWS:
             x0, y0, x1, y1 = sockets[(gender, view)]
-            base = socket(sockets[(gender, view)], whites[(gender, view)], skins[(gender, view)], shapes[(gender, view)], hexc(edge), scale)
+            base = socket(sockets[(gender, view)], whites[(gender, view)], skins[(gender, view)], shapes[(gender, view)], hexc(settings["edge"]), scale)
             glow = [bytearray(b"\xff\xff\xff\x00" * ((x1 - x0) * scale)) for _ in range((y1 - y0) * scale)]
             for side in (("L", "R") if view == "side" else (view,)):
                 save_png(os.path.join(d, f"normal_{side}_{rot}.png"), base)
@@ -637,4 +642,4 @@ def build(face, root):
 if __name__ == "__main__":
     args = sys.argv[1:]
     face = args.pop(0) if args and args[0] in FACES else "FA"
-    build(face, args[0] if args else FACES[face][1])
+    build(face, args[0] if args else FACES[face]["source"])
