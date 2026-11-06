@@ -9,8 +9,8 @@ ROOT = os.path.join(HERE, "..")
 IRISES = ("Textures", "Things", "Pawn", "BionicIrises")
 EXPERIMENTALS = r"C:\Program Files (x86)\Steam\steamapps\workshop\content\294100\2581693737"
 UNAGI = r"C:\Program Files (x86)\Steam\steamapps\workshop\content\294100\3268178647"
-FACES = {"FA": (ROOT, EXPERIMENTALS, os.path.join(ROOT, "1.6", "Defs", "BionicIrisLayouts.xml"), "#efe9e6"),
-         "UNAGI": (os.path.join(ROOT, "Mods", "UNAGI"), UNAGI, os.path.join(ROOT, "Mods", "UNAGI", "Patches", "BionicIrisLayouts.xml"), "#ffffff")}
+FACES = {"FA": (ROOT, EXPERIMENTALS, os.path.join(ROOT, "1.6", "Defs", "BionicIrisLayouts.xml"), "#efe9e6", 1),
+         "UNAGI": (os.path.join(ROOT, "Mods", "UNAGI"), UNAGI, os.path.join(ROOT, "Mods", "UNAGI", "Patches", "BionicIrisLayouts.xml"), "#ffffff", 4)}
 NORMAL_EYE = ("Textures", "Things", "Pawn", "FA-Experimentals", "Eyes", "Normal")
 LIDS = ("Textures", "Things", "Pawn", "FA-Experimentals", "Lids")
 SCLERA = 0.1
@@ -23,6 +23,7 @@ LINE_SPREAD = 15
 RIM_SPREAD = 10
 GLINT_GLOW = 0.5
 OWN_LINE = 0.86
+SOFT = False
 
 
 def read_png(path):
@@ -83,7 +84,7 @@ def rolling(values, reach):
 
 
 class Eye:
-    def __init__(self, texture, half):
+    def __init__(self, texture, half, even=False):
         self.coverage, self.brightness = texture
         self.half = half
         covered = [(x, y) for y, row in enumerate(self.coverage) for x, a in enumerate(row) if a > 0 and self.side(x)]
@@ -111,9 +112,14 @@ class Eye:
         self.reach_y = math.hypot(self.half_w * s, self.half_h * c)
         angles = [2 * math.pi * k / 360 for k in range(360)]
         rim = [self.march(a) for a in angles]
-        widths = [self.line_width(a, r) for a, r in zip(angles, rim)]
         self.rim = rolling(rim, RIM_SPREAD)
-        self.inner = [r - w for r, w in zip(self.rim, rolling(widths, LINE_SPREAD))]
+        if even:
+            opaque = [[b * a for b, a in zip(light, cover)] for light, cover in zip(self.brightness, self.coverage)]
+            below = sorted(self.line_width(a, r, opaque) for a, r in zip(angles, rim) if math.sin(a) > 0)
+            self.inner = [r - below[len(below) // 2] for r in self.rim]
+        else:
+            widths = [self.line_width(a, r, self.brightness) for a, r in zip(angles, rim)]
+            self.inner = [r - w for r, w in zip(self.rim, rolling(widths, LINE_SPREAD))]
         self.fit = 1.0
         edge = sorted(math.hypot(*self.design_point(self.cx + math.cos(a) * d, self.cy + math.sin(a) * d))
                       for a, d in zip(angles, self.inner))
@@ -153,9 +159,9 @@ class Eye:
             d += 0.02
         return d
 
-    def line_width(self, angle, rim):
+    def line_width(self, angle, rim, rows):
         d = rim
-        while d > 0 and self.ray(self.brightness, angle, d) < LINE_DARK:
+        while d > 0 and self.ray(rows, angle, d) < LINE_DARK:
             d -= 0.02
         return min(max(rim - d, 0.5), rim / 3)
 
@@ -266,9 +272,19 @@ def archotech(u, v, r, a, su, sv, glints=True):
     return lit("#c8c3b4", "#f3efe4", sv), None
 
 
-def speckle(u, v, cells, seed):
-    n = math.sin(math.floor((u + 1) * cells) * 127.1 + math.floor((v + 1) * cells) * 311.7 + seed * 74.7) * 43758.5453
+def grain(i, j, seed):
+    n = math.sin(i * 127.1 + j * 311.7 + seed * 74.7) * 43758.5453
     return n - math.floor(n)
+
+
+def speckle(u, v, cells, seed):
+    return grain(math.floor((u + 1) * cells), math.floor((v + 1) * cells), seed)
+
+
+def worn(u, v, cells, seed, share):
+    if not SOFT:
+        return speckle(u, v, cells, seed) < share
+    return blend(lambda i, j: 1.0 if grain(i, j, seed) < share else 0.0, (u + 1) * cells - 0.5, (v + 1) * cells - 0.5) >= 0.5
 
 
 def artificial(u, v, r, a, su, sv, glints=True):
@@ -292,7 +308,7 @@ def mechanical(u, v, r, a, su, sv, glints=True):
     if r > 0.72:
         if r > 0.75 and any(abs(math.remainder(a - k * math.pi / 3 - 0.4, 2 * math.pi)) < 0.2 for k in range(6)):
             return lit("#4f3418", "#a06d36", sv), None
-        return (lit("#1f1d1b", "#3e3a36", sv) if speckle(u, v, 9, 1) < 0.3 else lit("#2f2c29", "#6c665e", sv)), None
+        return (lit("#1f1d1b", "#3e3a36", sv) if worn(u, v, 9, 1, 0.3) else lit("#2f2c29", "#6c665e", sv)), None
     if r > 0.56 and math.cos(a * 8 + 0.3 * math.sin(a * 3)) <= -0.05:
         return hexc("#121110"), None
     if r < 0.09:
@@ -301,7 +317,7 @@ def mechanical(u, v, r, a, su, sv, glints=True):
         return hexc("#0d0c0b"), None
     if r < 0.32:
         return hexc("#1a1816"), None
-    return hexc("#1d1b19"), 0.48 + 0.34 * (sv + 1) / 2 - (0.14 if speckle(u, v, 10, 2) < 0.22 else 0.0)
+    return hexc("#1d1b19"), 0.48 + 0.34 * (sv + 1) / 2 - (0.14 if worn(u, v, 10, 2, 0.22) else 0.0)
 
 
 SPARKLES = [(-0.36, 0.20, 1.0), (0.35, 0.30, 0.8)]
@@ -402,18 +418,19 @@ DESIGNS = {"Bionic": (bionic, OUTLINE), "AdvancedBionic": (advanced, OUTLINE),
            "LightReceptor": (receptor, OUTLINE), "RoyalBionic": (royal, OUTLINE)}
 
 
-def draw(name, eye, region):
+def draw(name, eye, region, scale):
     design, outline = DESIGNS[name]
     x0, y0, x1, y1 = region
-    w, h = x1 - x0, y1 - y0
-    n = SS * SS
+    w, h = (x1 - x0) * scale, (y1 - y0) * scale
+    k = max(SS // scale, 2)
+    n = k * k
     cells = {}
-    for y in range(y0, y1):
-        for x in range(x0, x1):
+    for y in range(h):
+        for x in range(w):
             cover, colour, light, level = 0, [0.0, 0.0, 0.0], 0, 0.0
-            for sy in range(SS):
-                for sx in range(SS):
-                    px, py = x + (sx + 0.5) / SS, y + (sy + 0.5) / SS
+            for sy in range(k):
+                for sx in range(k):
+                    px, py = x0 + (x + (sx + 0.5) / k) / scale, y0 + (y + (sy + 0.5) / k) / scale
                     if not eye.inside(px, py):
                         continue
                     cover += 1
@@ -437,10 +454,10 @@ def draw(name, eye, region):
     base = [bytearray(bytes(round(c * 255) for c in outline) + b"\x00") * w for _ in range(h)]
     glow_rows = [bytearray(b"\xff\xff\xff\x00" * w) for _ in range(h)]
     for (x, y), (cover, colour, light, level) in cells.items():
-        o = (x - x0) * 4
-        base[y - y0][o:o + 4] = bytes([round(c / cover * 255) for c in colour] + [round(cover / n * 255)])
+        o = x * 4
+        base[y][o:o + 4] = bytes([round(c / cover * 255) for c in colour] + [round(cover / n * 255)])
         if light:
-            glow_rows[y - y0][o:o + 4] = bytes([round(level / light * 255)] * 3 + [round(light / n * 255)])
+            glow_rows[y][o:o + 4] = bytes([round(level / light * 255)] * 3 + [round(light / n * 255)])
     return base, glow_rows
 
 
@@ -483,26 +500,36 @@ def grow(points):
     return {(x + i, y + j) for x, y in points for j in (-1, 0, 1) for i in (-1, 0, 1)}
 
 
-def socket(region, white, bare, opening, edge):
+def blend(value, x, y):
+    i, j = math.floor(x), math.floor(y)
+    fx, fy = x - i, y - j
+    return (value(i, j) * (1 - fx) + value(i + 1, j) * fx) * (1 - fy) + (value(i, j + 1) * (1 - fx) + value(i + 1, j + 1) * fx) * fy
+
+
+def socket(region, white, bare, opening, edge, scale):
     x0, y0, x1, y1 = region
     ox0, oy0, ox1, oy1 = opening
     cx, cy, hx, hy = (ox0 + ox1) / 2, (oy0 + oy1) / 2, (ox1 - ox0) / 2, (oy1 - oy0) / 2
     solid = grow(white)
+    k = max(SS // scale, 2)
     rows = []
-    for y in range(y0, y1):
+    for j in range((y1 - y0) * scale):
         row = bytearray()
-        for x in range(x0, x1):
-            near = min([math.hypot(x - bx, y - by) for by in range(y - 3, y + 4) for bx in range(x - 3, x + 4) if (bx, by) in bare] + [4.0])
-            fade = smooth(white.get((x, y), 0.0), SCLERA, 0.9) * smooth(near, 0.5, 3.0)
+        for i in range((x1 - x0) * scale):
+            x, y = x0 + (i + 0.5) / scale - 0.5, y0 + (j + 0.5) / scale - 0.5
+            bx0, by0 = math.floor(x), math.floor(y)
+            near = min([math.hypot(x - bx, y - by) for by in range(by0 - 3, by0 + 5) for bx in range(bx0 - 3, bx0 + 5) if (bx, by) in bare] + [4.0])
+            fade = smooth(blend(lambda a, b: white.get((a, b), 0.0), x, y), SCLERA, 0.9) * smooth(near, 0.5, 3.0)
             total = [0.0, 0.0, 0.0]
-            for sy in range(SS):
-                for sx in range(SS):
-                    dx, dy = (x + (sx + 0.5) / SS - cx) / hx, (y + (sy + 0.5) / SS - cy) / hy
+            for sy in range(k):
+                for sx in range(k):
+                    dx, dy = (x0 + (i + (sx + 0.5) / k) / scale - cx) / hx, (y0 + (j + (sy + 0.5) / k) / scale - cy) / hy
                     d = min(1.0, math.hypot(dx, dy))
                     wall = mix(SOCKET_SHADE, SOCKET_LIT, 0.85 * smooth(dy, 0.1, 0.8))
                     hollow = mix(wall, SOCKET_DEEP, max(0.7 * smooth(-dy, 0.0, 0.8), 0.6 * (1 - d) ** 2))
                     total = [t + c for t, c in zip(total, mix(edge, hollow, fade))]
-            row += bytes(round(t / (SS * SS) * 255) for t in total) + (b"\xff" if (x, y) in solid else b"\x00")
+            cover = blend(lambda a, b: 1.0 if (a, b) in solid else 0.0, x, y)
+            row += bytes([round(t / (k * k) * 255) for t in total] + [round(cover * 255)])
         rows.append(row)
     return rows
 
@@ -550,14 +577,16 @@ def pair(left, right):
 
 
 def build(face, root):
-    home, _, layout, edge = FACES[face]
+    global SOFT
+    home, _, layout, edge, scale = FACES[face]
+    SOFT = scale > 1
     out = os.path.join(home, *IRISES)
     eyes, regions, sockets, whites, skins, shapes = {}, {}, {}, {}, {}, {}
     for gender in GENDERS:
         folder = os.path.join(root, *NORMAL_EYE, gender)
         south = read_png(os.path.join(folder, "normal_south.png"))
         east = read_png(os.path.join(folder, "normal_east.png"))
-        eyes[gender] = {"L": Eye(south, "L"), "R": Eye(south, "R"), "side": Eye(east, None)}
+        eyes[gender] = {"L": Eye(south, "L", scale > 1), "R": Eye(south, "R", scale > 1), "side": Eye(east, None, scale > 1)}
         for view, _ in VIEWS:
             x0, y0, x1, y1 = eyes[gender][view].box
             regions[(gender, view)] = (x0 - PAD, y0 - PAD, x1 + PAD, y1 + PAD)
@@ -581,7 +610,7 @@ def build(face, root):
             d = os.path.join(out, name, gender)
             os.makedirs(d, exist_ok=True)
             for view, rot in VIEWS:
-                base, glow = draw(name, eyes[gender][view], regions[(gender, view)])
+                base, glow = draw(name, eyes[gender][view], regions[(gender, view)], scale)
                 for side in (("L", "R") if view == "side" else (view,)):
                     save_png(os.path.join(d, f"normal_{side}_{rot}.png"), base)
                     save_png(os.path.join(d, f"normal_{side}_glow_{rot}.png"), glow)
@@ -591,8 +620,8 @@ def build(face, root):
         os.makedirs(d, exist_ok=True)
         for view, rot in VIEWS:
             x0, y0, x1, y1 = sockets[(gender, view)]
-            base = socket(sockets[(gender, view)], whites[(gender, view)], skins[(gender, view)], shapes[(gender, view)], hexc(edge))
-            glow = [bytearray(b"\xff\xff\xff\x00" * (x1 - x0)) for _ in range(y1 - y0)]
+            base = socket(sockets[(gender, view)], whites[(gender, view)], skins[(gender, view)], shapes[(gender, view)], hexc(edge), scale)
+            glow = [bytearray(b"\xff\xff\xff\x00" * ((x1 - x0) * scale)) for _ in range((y1 - y0) * scale)]
             for side in (("L", "R") if view == "side" else (view,)):
                 save_png(os.path.join(d, f"normal_{side}_{rot}.png"), base)
                 save_png(os.path.join(d, f"normal_{side}_glow_{rot}.png"), glow)
